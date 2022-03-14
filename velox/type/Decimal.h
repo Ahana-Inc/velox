@@ -25,10 +25,16 @@
 
 namespace facebook::velox {
 
+#define INT128_LOWER(X) ((uint64_t)X)
+#define INT128_UPPER(X) (X >> 64)
+#define MERGE_INT128(UPPER, LOWER) ((int128_t)UPPER << 64) | (LOWER)
+
 using int128_t = __int128_t;
 static constexpr uint8_t kMaxPrecisionInt128 = 38;
 static constexpr uint8_t kDefaultScale = 0;
 static constexpr uint8_t kDefaultPrecision = kMaxPrecisionInt128;
+static constexpr uint8_t kNumBitsInt128 = sizeof(int128_t) * 8;
+static constexpr int64_t kUint64Mask = 0xFFFFFFFFFFFFFFFF;
 
 /**
  * A wrapper struct over int128_t type.
@@ -48,31 +54,95 @@ struct Int128 {
     this->value = rhs.value;
   }
 
-  Int128 operator+(Int128& rhs) {
+  Int128 operator+(const Int128& rhs) {
     Int128 sum;
     VELOX_CHECK(!__builtin_add_overflow(this->value, rhs.value, &sum.value));
     return sum;
   }
 
-  Int128 operator*(Int128& rhs) {
+  Int128 operator*(const Int128& rhs) {
     Int128 product;
     VELOX_CHECK(
         !__builtin_mul_overflow(this->value, rhs.value, &product.value));
     return product;
   }
 
-  Int128 operator-(Int128& rhs) {
+  Int128 operator-(const Int128& rhs) {
     Int128 diff;
     VELOX_CHECK(!__builtin_sub_overflow(this->value, rhs.value, &diff.value));
     return diff;
+  }
+
+  Int128 operator/(const Int128& rhs) {
+    int128_t remainder = 0;
+    int128_t quotient = 0;
+
+    int64_t lhsUpper = (this->value >> 64);
+    uint64_t lhsLower = (uint64_t)this->value;
+
+    bool isNegative = (lhsUpper < 0);
+
+    // find left most bit set on the dividend.
+
+    // iterate over the bits of the dividend.
+    //  each iteration shift remainder and quotient.
+    return 0;
   }
 
   bool operator==(const Int128& other) const {
     return this->value == other.value;
   }
 
+  Int128 operator<<(const Int128 shift) {
+    const uint8_t shiftVal = shift.value;
+    if (shiftVal == 0) {
+      return *this;
+    }
+    if (shiftVal >= kNumBitsInt128) {
+      return Int128(0);
+    }
+    int64_t upper = INT128_UPPER(this->value);
+    uint64_t lower = INT128_LOWER(this->value);
+    if (shiftVal < 64) {
+      // If shiftVal is less than 64.
+      // A part of lower half will get added to upper half.
+      upper = (upper << shiftVal) + (lower >> (64 - shiftVal));
+      lower = lower << shiftVal;
+    } else {
+      // shiftVal is >=64
+      upper = (lower << (shiftVal - 64)) & kUint64Mask;
+      lower = 0;
+    }
+    return Int128(MERGE_INT128(upper, lower));
+  }
+
+  Int128 operator>>(const Int128 shift) {
+    const uint8_t shiftVal = shift.value;
+    if (shiftVal == 0) {
+      return *this;
+    }
+    if (shiftVal >= kNumBitsInt128) {
+      return (INT128_UPPER(this->value) < 0) ? Int128(-1) : Int128(0);
+    }
+    int64_t upper = INT128_UPPER(this->value);
+    uint64_t lower = INT128_LOWER(this->value);
+    if (shiftVal < 64) {
+      lower = (lower >> shiftVal) | (upper << (64 - shiftVal));
+      upper = upper >> shiftVal;
+    } else {
+      lower = (upper >> (shiftVal - 64)) & kUint64Mask;
+      upper = (upper < 0) ? -1 : 0;
+    }
+    return Int128(MERGE_INT128(upper, lower));
+  }
+
   Int128 operator~() {
     return ~this->value;
+  }
+
+ private:
+  Int128 complement() {
+    return (~this->value + 1);
   }
 };
 
