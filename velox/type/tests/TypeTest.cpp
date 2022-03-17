@@ -350,6 +350,78 @@ TEST(Type, Int128RightShiftOperator) {
       testHexVal >> 64);
 }
 
+TEST(type, leftMostBitSet128) {
+  Int128 testHexVal(0x0000000000000001);
+
+  EXPECT_EQ(
+      Int128::leftMostBitSet(Int128(MERGE_INT128(0x8000000000000000, 0))), 127);
+  EXPECT_EQ(
+      Int128::leftMostBitSet(Int128(MERGE_INT128(0x7000000000000000, 0))), 126);
+  EXPECT_EQ(
+      Int128::leftMostBitSet(Int128(MERGE_INT128(0x1, 0x7000000000000000))),
+      64);
+  EXPECT_EQ(Int128::leftMostBitSet(Int128(0xF000000000000001)), 63);
+  EXPECT_EQ(Int128::leftMostBitSet(Int128(0x0000000000000001)), 0);
+}
+
+TEST(type, int128Division) {
+  Int128 dividend(1023);
+  Int128 divisor(31);
+  Int128 remainder(0);
+  EXPECT_EQ(Int128::Division(dividend, divisor, remainder), 33);
+  EXPECT_EQ(remainder, 0);
+
+  dividend = 1030;
+  EXPECT_EQ(Int128::Division(dividend, divisor, remainder), 33);
+  EXPECT_EQ(remainder, 7);
+
+  dividend = -1030;
+  EXPECT_EQ(Int128::Division(dividend, divisor, remainder), -33);
+  EXPECT_EQ(remainder, 7);
+
+  dividend = 1030;
+  divisor = -31;
+  EXPECT_EQ(Int128::Division(dividend, divisor, remainder), -33);
+  EXPECT_EQ(remainder, 7);
+
+  dividend = 20;
+  divisor = 10000;
+  EXPECT_EQ(Int128::Division(dividend, divisor, remainder), 0);
+  EXPECT_EQ(remainder, 20);
+
+  dividend = -204678;
+  divisor = -31;
+  EXPECT_EQ(Int128::Division(dividend, divisor, remainder), 6602);
+  EXPECT_EQ(remainder, 16);
+
+  EXPECT_THROW(Int128::Division(dividend, 0, remainder), VeloxRuntimeError);
+  dividend = POWERS_OF_TEN[38];
+  divisor = POWERS_OF_TEN[14];
+  // 10000000000000000000000
+  EXPECT_EQ(Int128::Division(dividend, divisor, remainder), POWERS_OF_TEN[24]);
+  EXPECT_EQ(remainder, 0);
+
+  dividend = Int128(1234567890123456) * POWERS_OF_TEN[10];
+  divisor = Int128(123456) * POWERS_OF_TEN[12];
+  EXPECT_EQ(Int128::Division(dividend, divisor, remainder), 100000639);
+  EXPECT_EQ(remainder, Int128(1285056) * POWERS_OF_TEN[10]);
+
+  dividend = Int128::min();
+  divisor = 2;
+  EXPECT_EQ(
+      Int128::Division(dividend, divisor, remainder),
+      Int128(MERGE_INT128(0xC000000000000000, 0)));
+  EXPECT_EQ(remainder, 0);
+
+  dividend = Int128::max();
+  divisor = 2;
+  Int128 quotient = Int128::Division(dividend, divisor, remainder);
+  EXPECT_EQ(
+      Int128::Division(dividend, divisor, remainder),
+      Int128(MERGE_INT128(0x3FFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF)));
+  EXPECT_EQ(remainder, 1);
+}
+
 TEST(Type, Map) {
   auto map0 = MAP(INTEGER(), ARRAY(BIGINT()));
   EXPECT_EQ(map0->toString(), "MAP<INTEGER,ARRAY<BIGINT>>");

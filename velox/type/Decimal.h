@@ -25,8 +25,8 @@
 
 namespace facebook::velox {
 
+#define INT128_UPPER(X) ((int64_t)(X >> 64))
 #define INT128_LOWER(X) ((uint64_t)X)
-#define INT128_UPPER(X) (X >> 64)
 #define MERGE_INT128(UPPER, LOWER) ((int128_t)UPPER << 64) | (LOWER)
 
 using int128_t = __int128_t;
@@ -44,11 +44,20 @@ static constexpr int64_t kUint64Mask = 0xFFFFFFFFFFFFFFFF;
 struct Int128 {
   int128_t value = 0;
   Int128() = default;
+
   Int128(const Int128& copy) {
     this->value = copy.value;
   }
 
-  Int128(int128_t value) : value(value) {}
+  Int128(const int128_t value) : value(value) {}
+
+  static Int128 min() {
+    return Int128(MERGE_INT128(0x8000000000000000, 0));
+  }
+
+  static Int128 max() {
+    return Int128(MERGE_INT128(0x7FFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF));
+  }
 
   void operator=(const Int128& rhs) {
     this->value = rhs.value;
@@ -71,6 +80,55 @@ struct Int128 {
     Int128 diff;
     VELOX_CHECK(!__builtin_sub_overflow(this->value, rhs.value, &diff.value));
     return diff;
+  }
+
+  /*
+   * Arithmetic division operation. This algorithm is similar to DuckDbs
+   * implementation. This is adopted from Knuth's Art of Programming book,
+   * volume 2, Chapter 4.3.1.
+   *
+   * @lhs Int128 Dividend.
+   * @rhs Int128 Divisor.
+   * @remainder Int128 Remainder.
+   *
+   * @return Int128 quotient.
+   */
+  static Int128 Division(Int128 lhs, Int128 rhs, Int128& remainder) {
+    VELOX_CHECK_NE(rhs.value, 0, "Divide by zero error");
+    remainder = 0;
+    bool isNegative = false;
+    if (lhs.value < 0) {
+      isNegative = true;
+      lhs = lhs.complement();
+    }
+    if (rhs.value < 0) {
+      isNegative = !isNegative;
+      rhs = rhs.complement();
+    }
+
+    Int128 quotient(0);
+    uint8_t leftMostBit = leftMostBitSet(lhs);
+    for (int i = leftMostBit; i >= 0; --i) {
+      quotient = quotient << 1;
+      remainder = remainder << 1;
+      if (lhs.isBitSet(i)) {
+        remainder = remainder + 1;
+      }
+      if (remainder >= rhs) {
+        remainder = remainder - rhs;
+        quotient = quotient + 1;
+      }
+    }
+    return isNegative ? quotient.complement() : quotient;
+  }
+
+  Int128 operator/(Int128& rhs) {
+    Int128 remainder;
+    return Division(*this, rhs, remainder);
+  }
+
+  bool operator>=(const Int128& rhs) {
+    return (this->value >= rhs.value);
   }
 
   bool operator==(const Int128& other) const {
@@ -124,8 +182,31 @@ struct Int128 {
     return ~this->value;
   }
 
- private:
-  Int128 complement() {
+  Int128 operator&(const Int128& rhs) const {
+    return this->value & rhs.value;
+  }
+
+  FOLLY_ALWAYS_INLINE bool isBitSet(const uint8_t i) const {
+    return (*this & (Int128(1) << i)).value != 0;
+  }
+  /*
+   * Returns the left most bit set in 128-bit integer value.
+   * The position is 0-indexed.
+   */
+  static uint8_t leftMostBitSet(const Int128& input) {
+    // do an and with 2^127
+    Int128 mask(MERGE_INT128(0x8000000000000000, 0));
+    uint8_t count = 0;
+    Int128 value(input.value);
+    Int128 shift(1);
+    while ((value.value & mask.value) == 0) {
+      value = value << 1;
+      count++;
+    }
+    return kNumBitsInt128 - count - 1;
+  }
+
+  FOLLY_ALWAYS_INLINE Int128 complement() const {
     return (~this->value + 1);
   }
 };
@@ -200,6 +281,46 @@ class Decimal {
                                   // of radix point.
 };
 
+static const Int128 POWERS_OF_TEN[] = {
+    Int128(1),
+    Int128(10),
+    Int128(100),
+    Int128(1000),
+    Int128(10000),
+    Int128(100000),
+    Int128(1000000),
+    Int128(10000000),
+    Int128(100000000),
+    Int128(1000000000),
+    Int128(10000000000),
+    Int128(100000000000),
+    Int128(1000000000000),
+    Int128(10000000000000),
+    Int128(100000000000000),
+    Int128(1000000000000000),
+    Int128(10000000000000000),
+    Int128(100000000000000000),
+    Int128(100000000000000000) * Int128(10),
+    Int128(100000000000000000) * Int128(100),
+    Int128(100000000000000000) * Int128(1000),
+    Int128(100000000000000000) * Int128(10000),
+    Int128(100000000000000000) * Int128(100000),
+    Int128(100000000000000000) * Int128(1000000),
+    Int128(100000000000000000) * Int128(10000000),
+    Int128(100000000000000000) * Int128(100000000),
+    Int128(100000000000000000) * Int128(1000000000),
+    Int128(100000000000000000) * Int128(10000000000),
+    Int128(100000000000000000) * Int128(100000000000),
+    Int128(100000000000000000) * Int128(1000000000000),
+    Int128(100000000000000000) * Int128(10000000000000),
+    Int128(100000000000000000) * Int128(100000000000000),
+    Int128(100000000000000000) * Int128(1000000000000000),
+    Int128(100000000000000000) * Int128(10000000000000000),
+    Int128(100000000000000000) * Int128(100000000000000000),
+    Int128(100000000000000000) * Int128(100000000000000000) * Int128(10),
+    Int128(100000000000000000) * Int128(100000000000000000) * Int128(100),
+    Int128(100000000000000000) * Int128(100000000000000000) * Int128(1000),
+    Int128(100000000000000000) * Int128(100000000000000000) * Int128(10000)};
 class DecimalCasts {
  public:
   static Decimal parseStringToDecimal(const std::string& value) {
@@ -224,6 +345,9 @@ class DecimalCasts {
       Int128& result,
       uint8_t& precision,
       uint8_t& scale) {
+    result = 0;
+    precision = 0;
+    scale = 0;
     uint8_t pos = 0;
     bool isNegative = false;
     // Remove leading zeroes.
