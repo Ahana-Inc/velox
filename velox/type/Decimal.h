@@ -93,16 +93,18 @@ struct Int128 {
    *
    * @return Int128 quotient.
    */
-  static Int128 Division(Int128 lhs, Int128 rhs, Int128& remainder) {
+  static Int128 divisionMod(Int128 lhs, Int128 rhs, Int128& remainder) {
     VELOX_CHECK_NE(rhs.value, 0, "Divide by zero error");
     remainder = 0;
-    bool isNegative = false;
+    bool isLhsNegative = false;
     if (lhs.value < 0) {
-      isNegative = true;
+      isLhsNegative = true;
       lhs = lhs.complement();
     }
+
+    bool isRhsNegative = false;
     if (rhs.value < 0) {
-      isNegative = !isNegative;
+      isRhsNegative = true;
       rhs = rhs.complement();
     }
 
@@ -119,12 +121,15 @@ struct Int128 {
         quotient = quotient + 1;
       }
     }
-    return isNegative ? quotient.complement() : quotient;
+
+    remainder = (isLhsNegative) ? remainder.complement() : remainder;
+
+    return (isLhsNegative ^ isRhsNegative) ? quotient.complement() : quotient;
   }
 
   Int128 operator/(Int128& rhs) {
     Int128 remainder;
-    return Division(*this, rhs, remainder);
+    return divisionMod(*this, rhs, remainder);
   }
 
   bool operator>=(const Int128& rhs) {
@@ -320,7 +325,9 @@ static const Int128 POWERS_OF_TEN[] = {
     Int128(100000000000000000) * Int128(100000000000000000) * Int128(10),
     Int128(100000000000000000) * Int128(100000000000000000) * Int128(100),
     Int128(100000000000000000) * Int128(100000000000000000) * Int128(1000),
-    Int128(100000000000000000) * Int128(100000000000000000) * Int128(10000)};
+    Int128(100000000000000000) * Int128(100000000000000000) *
+        Int128(10000)}; // 10^38
+
 class DecimalCasts {
  public:
   static Decimal parseStringToDecimal(const std::string& value) {

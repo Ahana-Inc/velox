@@ -364,60 +364,61 @@ TEST(type, leftMostBitSet128) {
   EXPECT_EQ(Int128::leftMostBitSet(Int128(0x0000000000000001)), 0);
 }
 
-TEST(type, int128Division) {
+TEST(type, int128divisionMod) {
   Int128 dividend(1023);
   Int128 divisor(31);
   Int128 remainder(0);
-  EXPECT_EQ(Int128::Division(dividend, divisor, remainder), 33);
+  EXPECT_EQ(Int128::divisionMod(dividend, divisor, remainder), 33);
   EXPECT_EQ(remainder, 0);
 
   dividend = 1030;
-  EXPECT_EQ(Int128::Division(dividend, divisor, remainder), 33);
+  EXPECT_EQ(Int128::divisionMod(dividend, divisor, remainder), 33);
   EXPECT_EQ(remainder, 7);
 
   dividend = -1030;
-  EXPECT_EQ(Int128::Division(dividend, divisor, remainder), -33);
-  EXPECT_EQ(remainder, 7);
+  EXPECT_EQ(Int128::divisionMod(dividend, divisor, remainder), -33);
+  EXPECT_EQ(remainder, -7);
 
   dividend = 1030;
   divisor = -31;
-  EXPECT_EQ(Int128::Division(dividend, divisor, remainder), -33);
+  EXPECT_EQ(Int128::divisionMod(dividend, divisor, remainder), -33);
   EXPECT_EQ(remainder, 7);
 
   dividend = 20;
   divisor = 10000;
-  EXPECT_EQ(Int128::Division(dividend, divisor, remainder), 0);
+  EXPECT_EQ(Int128::divisionMod(dividend, divisor, remainder), 0);
   EXPECT_EQ(remainder, 20);
 
   dividend = -204678;
   divisor = -31;
-  EXPECT_EQ(Int128::Division(dividend, divisor, remainder), 6602);
-  EXPECT_EQ(remainder, 16);
+  EXPECT_EQ(Int128::divisionMod(dividend, divisor, remainder), 6602);
+  EXPECT_EQ(remainder, -16);
 
-  EXPECT_THROW(Int128::Division(dividend, 0, remainder), VeloxRuntimeError);
+  EXPECT_THROW(Int128::divisionMod(dividend, 0, remainder), VeloxRuntimeError);
   dividend = POWERS_OF_TEN[38];
   divisor = POWERS_OF_TEN[14];
   // 10000000000000000000000
-  EXPECT_EQ(Int128::Division(dividend, divisor, remainder), POWERS_OF_TEN[24]);
+  EXPECT_EQ(
+      Int128::divisionMod(dividend, divisor, remainder), POWERS_OF_TEN[24]);
   EXPECT_EQ(remainder, 0);
 
   dividend = Int128(1234567890123456) * POWERS_OF_TEN[10];
   divisor = Int128(123456) * POWERS_OF_TEN[12];
-  EXPECT_EQ(Int128::Division(dividend, divisor, remainder), 100000639);
+  EXPECT_EQ(Int128::divisionMod(dividend, divisor, remainder), 100000639);
   EXPECT_EQ(remainder, Int128(1285056) * POWERS_OF_TEN[10]);
 
   dividend = Int128::min();
   divisor = 2;
   EXPECT_EQ(
-      Int128::Division(dividend, divisor, remainder),
+      Int128::divisionMod(dividend, divisor, remainder),
       Int128(MERGE_INT128(0xC000000000000000, 0)));
   EXPECT_EQ(remainder, 0);
 
   dividend = Int128::max();
   divisor = 2;
-  Int128 quotient = Int128::Division(dividend, divisor, remainder);
+  Int128 quotient = Int128::divisionMod(dividend, divisor, remainder);
   EXPECT_EQ(
-      Int128::Division(dividend, divisor, remainder),
+      Int128::divisionMod(dividend, divisor, remainder),
       Int128(MERGE_INT128(0x3FFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF)));
   EXPECT_EQ(remainder, 1);
 }
