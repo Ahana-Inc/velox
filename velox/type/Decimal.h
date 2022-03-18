@@ -22,7 +22,7 @@
 #include <type_traits>
 #include "velox/common/base/Exceptions.h"
 #include "velox/type/StringView.h"
-
+#include "folly/hash/Hash.h"
 namespace facebook::velox {
 
 #define INT128_UPPER(X) ((int64_t)(X >> 64))
@@ -59,24 +59,24 @@ struct Int128 {
     return Int128(MERGE_INT128(0x7FFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF));
   }
 
-  void operator=(const Int128& rhs) {
+  FOLLY_ALWAYS_INLINE void operator=(const Int128& rhs) {
     this->value = rhs.value;
   }
 
-  Int128 operator+(const Int128& rhs) {
+  FOLLY_ALWAYS_INLINE Int128 operator+(const Int128& rhs) {
     Int128 sum;
     VELOX_CHECK(!__builtin_add_overflow(this->value, rhs.value, &sum.value));
     return sum;
   }
 
-  Int128 operator*(const Int128& rhs) {
+  FOLLY_ALWAYS_INLINE Int128 operator*(const Int128& rhs) {
     Int128 product;
     VELOX_CHECK(
         !__builtin_mul_overflow(this->value, rhs.value, &product.value));
     return product;
   }
 
-  Int128 operator-(const Int128& rhs) {
+  FOLLY_ALWAYS_INLINE Int128 operator-(const Int128& rhs) {
     Int128 diff;
     VELOX_CHECK(!__builtin_sub_overflow(this->value, rhs.value, &diff.value));
     return diff;
@@ -93,16 +93,18 @@ struct Int128 {
    *
    * @return Int128 quotient.
    */
-  static Int128 Division(Int128 lhs, Int128 rhs, Int128& remainder) {
+  static Int128 divisionMod(Int128 lhs, Int128 rhs, Int128& remainder) {
     VELOX_CHECK_NE(rhs.value, 0, "Divide by zero error");
     remainder = 0;
-    bool isNegative = false;
+    bool isLhsNegative = false;
     if (lhs.value < 0) {
-      isNegative = true;
+      isLhsNegative = true;
       lhs = lhs.complement();
     }
+
+    bool isRhsNegative = false;
     if (rhs.value < 0) {
-      isNegative = !isNegative;
+      isRhsNegative = true;
       rhs = rhs.complement();
     }
 
@@ -119,23 +121,26 @@ struct Int128 {
         quotient = quotient + 1;
       }
     }
-    return isNegative ? quotient.complement() : quotient;
+
+    remainder = (isLhsNegative) ? remainder.complement() : remainder;
+
+    return (isLhsNegative ^ isRhsNegative) ? quotient.complement() : quotient;
   }
 
-  Int128 operator/(Int128& rhs) {
+  FOLLY_ALWAYS_INLINE Int128 operator/(Int128& rhs) {
     Int128 remainder;
-    return Division(*this, rhs, remainder);
+    return divisionMod(*this, rhs, remainder);
   }
 
-  bool operator>=(const Int128& rhs) {
+  FOLLY_ALWAYS_INLINE bool operator>=(const Int128& rhs) {
     return (this->value >= rhs.value);
   }
 
-  bool operator==(const Int128& other) const {
+  FOLLY_ALWAYS_INLINE bool operator==(const Int128& other) const {
     return this->value == other.value;
   }
 
-  Int128 operator<<(const Int128 shift) {
+  FOLLY_ALWAYS_INLINE Int128 operator<<(const Int128 shift) {
     const uint8_t shiftVal = shift.value;
     if (shiftVal == 0) {
       return *this;
@@ -158,7 +163,7 @@ struct Int128 {
     return Int128(MERGE_INT128(upper, lower));
   }
 
-  Int128 operator>>(const Int128 shift) {
+  FOLLY_ALWAYS_INLINE Int128 operator>>(const Int128 shift) {
     const uint8_t shiftVal = shift.value;
     if (shiftVal == 0) {
       return *this;
@@ -178,11 +183,11 @@ struct Int128 {
     return Int128(MERGE_INT128(upper, lower));
   }
 
-  Int128 operator~() {
+  FOLLY_ALWAYS_INLINE Int128 operator~() {
     return ~this->value;
   }
 
-  Int128 operator&(const Int128& rhs) const {
+  FOLLY_ALWAYS_INLINE Int128 operator&(const Int128& rhs) const {
     return this->value & rhs.value;
   }
 
@@ -208,6 +213,36 @@ struct Int128 {
 
   FOLLY_ALWAYS_INLINE Int128 complement() const {
     return (~this->value + 1);
+  }
+
+  FOLLY_ALWAYS_INLINE bool operator<(const Int128 rhs) const {
+    return this->value < rhs.value;
+  }
+
+  std::string toString() {
+    std::string valueStr;
+    Int128 number = *this;
+    bool isNegative = false;
+    if (number == 0) {
+      valueStr += '0';
+      return valueStr;
+    }
+    if(number < 0) {
+      isNegative = true;
+      number = number.complement();
+    }
+    // 120
+    Int128 digit;
+    while(number.value != 0) {
+      number = divisionMod(number, 10, digit);
+      digit = digit < 0? digit*-1:digit;
+      valueStr += digit.value + '0';
+    }
+    if (isNegative) {
+      valueStr.append("-");
+    }
+    std::reverse(valueStr.begin(), valueStr.end());
+    return valueStr;
   }
 };
 
@@ -253,7 +288,8 @@ class Decimal {
   }
 
   bool operator<(const Decimal& other) const {
-    VELOX_NYI();
+    // VELOX_NYI();
+    return this->unscaledValue_ < other.getUnscaledValue();
   }
 
   bool operator<=(const Decimal& other) const {
@@ -320,13 +356,16 @@ static const Int128 POWERS_OF_TEN[] = {
     Int128(100000000000000000) * Int128(100000000000000000) * Int128(10),
     Int128(100000000000000000) * Int128(100000000000000000) * Int128(100),
     Int128(100000000000000000) * Int128(100000000000000000) * Int128(1000),
-    Int128(100000000000000000) * Int128(100000000000000000) * Int128(10000)};
+    Int128(100000000000000000) * Int128(100000000000000000) *
+        Int128(10000)}; // 10^38
+
 class DecimalCasts {
  public:
   static Decimal parseStringToDecimal(const std::string& value) {
     // throws overflow exception if length is > 38
-    VELOX_CHECK_GT(
-        value.length(), 0, "Decimal string must have at least 1 char")
+    //VELOX_CHECK_GT(
+    //    value.length(), 0, "Decimal string must have at least 1 char")
+    if (value.length() == 0) return Decimal(0);
     Int128 unscaledValue;
     uint8_t precision;
     uint8_t scale;
@@ -398,7 +437,7 @@ namespace std {
 template <>
 struct hash<::facebook::velox::Decimal> {
   size_t operator()(const ::facebook::velox::Decimal& value) const {
-    VELOX_NYI();
+    return folly::hasher<signed __int128>()(value.getUnscaledValue().value);
   }
 };
 
@@ -409,7 +448,7 @@ namespace folly {
 template <>
 struct hasher<::facebook::velox::Decimal> {
   size_t operator()(const ::facebook::velox::Decimal& value) const {
-    VELOX_NYI();
+    return folly::hasher<signed __int128>()(value.getUnscaledValue().value);
   }
 };
 } // namespace folly

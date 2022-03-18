@@ -18,7 +18,8 @@
 
 namespace facebook::velox {
 void parseTo(folly::StringPiece in, Decimal& out) {
-  VELOX_NYI();
+  // VELOX_NYI();
+   out = DecimalCasts::parseStringToDecimal(in.toString());
 }
 
 std::string Decimal::toString() const {
