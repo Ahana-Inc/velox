@@ -73,22 +73,6 @@ struct Int128 {
     return diff;
   }
 
-  Int128 operator/(const Int128& rhs) {
-    int128_t remainder = 0;
-    int128_t quotient = 0;
-
-    int64_t lhsUpper = (this->value >> 64);
-    uint64_t lhsLower = (uint64_t)this->value;
-
-    bool isNegative = (lhsUpper < 0);
-
-    // find left most bit set on the dividend.
-
-    // iterate over the bits of the dividend.
-    //  each iteration shift remainder and quotient.
-    return 0;
-  }
-
   bool operator==(const Int128& other) const {
     return this->value == other.value;
   }
