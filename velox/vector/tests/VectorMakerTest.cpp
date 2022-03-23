@@ -30,6 +30,22 @@ class VectorMakerTest : public ::testing::Test {
   VectorMaker maker_{pool_.get()};
 };
 
+TEST_F(VectorMakerTest, decimalFlatVector) {
+  std::vector<int128_t> data = {100, 12, 13, 14};
+  auto flatVector = maker_.flatVector<Decimal>(data, TYPMOD(2, 1));
+
+  EXPECT_EQ(data.size(), flatVector->size());
+  EXPECT_FALSE(flatVector->mayHaveNulls());
+  EXPECT_EQ(0, flatVector->getNullCount().value());
+  EXPECT_FALSE(flatVector->isSorted().value());
+  EXPECT_EQ(4, flatVector->getDistinctValueCount().value());
+  EXPECT_EQ(Decimal(12, TYPMOD(2, 1)), flatVector->getDecimalMin().value());
+
+  for (vector_size_t i = 0; i < data.size(); i++) {
+    EXPECT_EQ(data[i], flatVector->valueAt(i));
+  }
+}
+
 TEST_F(VectorMakerTest, flatVector) {
   std::vector<int64_t> data = {0, 1, 2, 3, 1024, -123456, -99, -999, -1};
   auto flatVector = maker_.flatVector(data);

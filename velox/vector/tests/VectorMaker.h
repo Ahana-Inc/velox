@@ -139,6 +139,11 @@ class VectorMaker {
   template <typename T>
   FlatVectorPtr<EvalType<T>> flatVector(const std::vector<T>& data);
 
+  template <typename T>
+  FlatVectorPtr<EvalType<T>> flatVector(
+      const std::vector<VectorMaker::EvalType<T>>& data,
+      int typmod);
+
   // Helper overload to allow users to use initializer list directly without
   // explicitly specifying the template type, e.g:
   //

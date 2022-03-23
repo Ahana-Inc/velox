@@ -212,6 +212,14 @@ class SimpleVector : public BaseVector {
     return min_;
   }
 
+  const std::optional<Decimal> getDecimalMin() const {
+    return Decimal(min_.value(), type_->typmod());
+  }
+
+  const std::optional<Decimal> getDecimalMax() const {
+    return Decimal(max_.value(), type_->typmod());
+  }
+
   const std::optional<T>& getMax() const {
     return max_;
   }

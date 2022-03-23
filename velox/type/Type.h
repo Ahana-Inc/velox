@@ -271,12 +271,12 @@ struct TypeTraits<TypeKind::DATE> {
 template <>
 struct TypeTraits<TypeKind::DECIMAL> {
   using ImplType = ScalarType<TypeKind::DECIMAL>;
-  using NativeType = Decimal;
-  using DeepCopiedType = Decimal;
+  using NativeType = int128_t;
+  using DeepCopiedType = NativeType;
   static constexpr uint32_t minSubTypes = 0;
   static constexpr uint32_t maxSubTypes = 0;
   static constexpr TypeKind typeKind = TypeKind::DECIMAL;
-  static constexpr bool isPrimitiveType = false;
+  static constexpr bool isPrimitiveType = true;
   static constexpr bool isFixedWidth = true;
   static constexpr const char* name = "DECIMAL";
 };
@@ -411,7 +411,12 @@ struct TypeFactory;
 class Type : public Tree<const std::shared_ptr<const Type>>,
              public velox::ISerializable {
  public:
-  explicit Type(TypeKind kind) : kind_{kind} {}
+  explicit Type(TypeKind kind, int typmod = -1)
+      : kind_{kind}, typmod_(typmod) {}
+
+  int typmod() const {
+    return typmod_;
+  }
 
   TypeKind kind() const {
     return kind_;
@@ -488,7 +493,7 @@ class Type : public Tree<const std::shared_ptr<const Type>>,
 
  private:
   const TypeKind kind_;
-
+  int typmod_;
   VELOX_DEFINE_CLASS_NAME(Type)
 };
 
@@ -502,6 +507,7 @@ class TypeBase : public Type {
   using NativeType = TypeTraits<KIND>;
 
   TypeBase() : Type{KIND} {}
+  TypeBase(int typmod) : Type{KIND, typmod} {}
 
   bool isPrimitiveType() const override {
     return TypeTraits<KIND>::isPrimitiveType;
@@ -519,6 +525,10 @@ class TypeBase : public Type {
 template <TypeKind KIND>
 class ScalarType : public TypeBase<KIND> {
  public:
+  ScalarType() : TypeBase<KIND>{} {}
+
+  ScalarType(int typmod) : TypeBase<KIND>{typmod} {}
+
   uint32_t size() const override {
     return 0;
   }
@@ -539,6 +549,8 @@ class ScalarType : public TypeBase<KIND> {
     return Type::cppSizeInBytes();
   }
 
+  FOLLY_NOINLINE static const std::shared_ptr<const ScalarType<KIND>> create(
+      int typmod);
   FOLLY_NOINLINE static const std::shared_ptr<const ScalarType<KIND>> create();
 
   bool operator==(const Type& other) const override {
@@ -557,6 +569,15 @@ class ScalarType : public TypeBase<KIND> {
 template <TypeKind KIND>
 const std::shared_ptr<const ScalarType<KIND>> ScalarType<KIND>::create() {
   static const auto instance = std::make_shared<const ScalarType<KIND>>();
+  return instance;
+}
+/**
+ * {typmod} = ScalarType<DECIMAL>{typmod}
+ */
+template <TypeKind KIND>
+const std::shared_ptr<const ScalarType<KIND>> ScalarType<KIND>::create(
+    int typmod) {
+  const auto instance = std::make_shared<const ScalarType<KIND>>(typmod);
   return instance;
 }
 
@@ -883,6 +904,10 @@ struct ComplexType {
 template <TypeKind KIND>
 struct TypeFactory {
   // default factory
+  static std::shared_ptr<const typename TypeTraits<KIND>::ImplType> create(
+      int typmod) {
+    return TypeTraits<KIND>::ImplType::create(typmod);
+  }
   static std::shared_ptr<const typename TypeTraits<KIND>::ImplType> create() {
     return TypeTraits<KIND>::ImplType::create();
   }
@@ -1429,6 +1454,9 @@ struct CppToType {};
 
 template <TypeKind KIND>
 struct CppToTypeBase : public TypeTraits<KIND> {
+  static auto create(int typmod) {
+    return TypeFactory<KIND>::create(typmod);
+  }
   static auto create() {
     return TypeFactory<KIND>::create();
   }

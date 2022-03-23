@@ -88,6 +88,7 @@ std::string mapTypeKindToName(const TypeKind& typeKind) {
       {TypeKind::VARBINARY, "VARBINARY"},
       {TypeKind::TIMESTAMP, "TIMESTAMP"},
       {TypeKind::DATE, "DATE"},
+      {TypeKind::DECIMAL, "DECIMAL"},
       {TypeKind::ARRAY, "ARRAY"},
       {TypeKind::MAP, "MAP"},
       {TypeKind::ROW, "ROW"},

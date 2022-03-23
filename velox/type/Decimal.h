@@ -20,14 +20,17 @@
 #include <sstream>
 #include <string>
 #include <type_traits>
+#include "folly/hash/Hash.h"
 #include "velox/common/base/Exceptions.h"
 #include "velox/type/StringView.h"
-#include "folly/hash/Hash.h"
 namespace facebook::velox {
 
 #define INT128_UPPER(X) ((int64_t)(X >> 64))
 #define INT128_LOWER(X) ((uint64_t)X)
 #define MERGE_INT128(UPPER, LOWER) ((int128_t)UPPER << 64) | (LOWER)
+#define PRECISION(typmod) ((uint8_t)(typmod >> 8))
+#define SCALE(typmod) ((uint8_t)(typmod))
+#define TYPMOD(PRECISION, SCALE) (PRECISION << 8 | SCALE)
 
 using int128_t = __int128_t;
 static constexpr uint8_t kMaxPrecisionInt128 = 38;
@@ -227,15 +230,15 @@ struct Int128 {
       valueStr += '0';
       return valueStr;
     }
-    if(number < 0) {
+    if (number < 0) {
       isNegative = true;
       number = number.complement();
     }
     // 120
     Int128 digit;
-    while(number.value != 0) {
+    while (number.value != 0) {
       number = divisionMod(number, 10, digit);
-      digit = digit < 0? digit*-1:digit;
+      digit = digit < 0 ? digit * -1 : digit;
       valueStr += digit.value + '0';
     }
     if (isNegative) {
@@ -260,29 +263,31 @@ class Decimal {
     return scale_;
   }
 
-  inline Int128 getUnscaledValue() const {
+  inline int128_t getUnscaledValue() const {
     return unscaledValue_;
   }
 
-  inline void setUnscaledValue(const Int128& value) {
+  inline void setUnscaledValue(const int128_t& value) {
     unscaledValue_ = value;
   }
 
   // Needed for serialization of FlatVector<Decimal>
-  operator StringView() const {VELOX_NYI()}
+  // operator StringView() const {VELOX_NYI()}
 
-  std::string toString() const;
+  static std::string toString();
 
   operator std::string() const {
     return toString();
   }
 
   bool operator==(const Decimal& other) const {
+    // return this->unscaledValue_ == other.unscaledValue_;
     return (
         this->unscaledValue_ == other.getUnscaledValue() &&
         this->precision_ == other.getPrecision() &&
         this->scale_ == other.getScale());
   }
+
   bool operator!=(const Decimal& other) const {
     return !(*this == other);
   }
@@ -300,17 +305,17 @@ class Decimal {
     VELOX_NYI();
   }
 
-  Decimal(
-      Int128 value,
-      uint8_t precision = kDefaultPrecision,
-      uint8_t scale = kDefaultScale)
-      : unscaledValue_(value), precision_(precision), scale_(scale) {}
+  Decimal(const int128_t& value, int typmod)
+      : unscaledValue_(value),
+        precision_(PRECISION(typmod)),
+        scale_(SCALE(typmod)) {}
 
-  constexpr Decimal() = default;
+  Decimal(const int128_t value) : unscaledValue_(value) {}
+  Decimal() = default;
 
  private:
-  Int128 unscaledValue_; // The actual unscaled value with
-                         // max precision 38.
+  int128_t unscaledValue_; // The actual unscaled value with
+                           // max precision 38.
   uint8_t precision_ = kDefaultPrecision; // The number of digits in unscaled
                                           // decimal value
   uint8_t scale_ = kDefaultScale; // The number of digits on the right
@@ -363,10 +368,11 @@ class DecimalCasts {
  public:
   static Decimal parseStringToDecimal(const std::string& value) {
     // throws overflow exception if length is > 38
-    //VELOX_CHECK_GT(
+    // VELOX_CHECK_GT(
     //    value.length(), 0, "Decimal string must have at least 1 char")
-    if (value.length() == 0) return Decimal(0);
-    Int128 unscaledValue;
+    if (value.length() == 0)
+      return Decimal(0);
+    int128_t unscaledValue;
     uint8_t precision;
     uint8_t scale;
     try {
@@ -374,14 +380,14 @@ class DecimalCasts {
     } catch (VeloxRuntimeError const& e) {
       VELOX_USER_CHECK(false, "Decimal overflow");
     }
-    return Decimal(unscaledValue, precision, scale);
+    return Decimal(unscaledValue);
   }
 
   /**
    */
   static void parseToInt128(
       std::string value,
-      Int128& result,
+      int128_t& result,
       uint8_t& precision,
       uint8_t& scale) {
     result = 0;
@@ -403,8 +409,8 @@ class DecimalCasts {
     precision = 0;
     scale = 0;
     bool hasScale = false;
-    Int128 digit;
-    Int128 exponent((int128_t)10);
+    int128_t digit;
+    int128_t exponent((int128_t)10);
     while (pos < value.length()) {
       if (value[pos] == '.') {
         hasScale = true;
@@ -412,7 +418,7 @@ class DecimalCasts {
         continue;
       }
       VELOX_USER_CHECK(std::isdigit(value[pos]), "Invalid decimal string");
-      digit.value = value[pos] - '0';
+      digit = value[pos] - '0';
       if (isNegative) {
         result = result * exponent - digit;
       } else {
@@ -437,7 +443,7 @@ namespace std {
 template <>
 struct hash<::facebook::velox::Decimal> {
   size_t operator()(const ::facebook::velox::Decimal& value) const {
-    return folly::hasher<signed __int128>()(value.getUnscaledValue().value);
+    return folly::hasher<signed __int128>()(value.getUnscaledValue());
   }
 };
 
@@ -448,7 +454,7 @@ namespace folly {
 template <>
 struct hasher<::facebook::velox::Decimal> {
   size_t operator()(const ::facebook::velox::Decimal& value) const {
-    return folly::hasher<signed __int128>()(value.getUnscaledValue().value);
+    return folly::hasher<signed __int128>()(value.getUnscaledValue());
   }
 };
 } // namespace folly

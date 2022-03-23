@@ -19,10 +19,10 @@
 namespace facebook::velox {
 void parseTo(folly::StringPiece in, Decimal& out) {
   // VELOX_NYI();
-   out = DecimalCasts::parseStringToDecimal(in.toString());
+  out = DecimalCasts::parseStringToDecimal(in.toString());
 }
 
-std::string Decimal::toString() const {
+std::string Decimal::toString() {
   VELOX_NYI();
 }
 

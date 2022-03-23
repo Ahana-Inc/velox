@@ -84,7 +84,7 @@ struct VariantEquality<TypeKind::DECIMAL> {
     if (a.isNull() || b.isNull()) {
       return evaluateNullEquality<NullEqualsNull>(a, b);
     } else {
-      return a.value<TypeKind::DECIMAL>() == b.value<TypeKind::DECIMAL>();
+      return a.value<TypeKind::BIGINT>() == b.value<TypeKind::BIGINT>();
     }
   }
 };
