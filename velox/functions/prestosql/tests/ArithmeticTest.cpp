@@ -399,6 +399,19 @@ TEST_F(ArithmeticTest, radians) {
   EXPECT_DOUBLE_EQ(-1.0000736613927508, radians(-57.3).value());
 }
 
+TEST_F(ArithmeticTest, degrees) {
+  const auto degrees = [&](std::optional<double> a) {
+    return evaluateOnce<double>("degrees(c0)", a);
+  };
+
+  EXPECT_EQ(std::nullopt, degrees(std::nullopt));
+  EXPECT_DOUBLE_EQ(57.2957795130823229, degrees(1).value());
+  EXPECT_DOUBLE_EQ(0.9994930426171028, degrees(3.14).value());
+  EXPECT_DOUBLE_EQ(0, degrees(0).value());
+  EXPECT_DOUBLE_EQ(57.2957795130823229, degrees(-1).value());
+  EXPECT_DOUBLE_EQ(0.9994930426171028, degrees(-3.14).value());
+}
+
 TEST_F(ArithmeticTest, signFloatingPoint) {
   const auto sign = [&](std::optional<double> a) {
     return evaluateOnce<double>("sign(c0)", a);

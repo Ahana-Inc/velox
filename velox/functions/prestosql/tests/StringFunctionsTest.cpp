@@ -1053,6 +1053,28 @@ TEST_F(StringFunctionsTest, sha256) {
   EXPECT_EQ(std::nullopt, sha256(std::nullopt));
 }
 
+TEST_F(StringFunctionsTest, sha512) {
+  const auto sha512 = [&](std::optional<std::string> arg) {
+    return evaluateOnce<std::string, std::string>(
+        "sha512(c0)", {arg}, {VARBINARY()});
+  };
+
+  EXPECT_EQ(
+      hexToDec(
+          "02208b9403a87df9f4ed6b2ee2657efaa589026b4cce9accc8e8a5bf3d693c86"),
+      sha512("hashme"));
+  EXPECT_EQ(
+      hexToDec(
+          "d0067cad9a63e0813759a2bb841051ca73570c0da2e08e840a8eb45db6a7a010"),
+      sha512("Infinity"));
+  EXPECT_EQ(
+      hexToDec(
+          "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"),
+      sha512(""));
+
+  EXPECT_EQ(std::nullopt, sha512(std::nullopt));
+}
+
 void StringFunctionsTest::testReplaceInPlace(
     const std::vector<std::pair<std::string, std::string>>& tests,
     const std::string& search,

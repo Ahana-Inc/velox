@@ -323,6 +323,13 @@ struct RadiansFunction {
 };
 
 template <typename T>
+struct DegreesFunction {
+  FOLLY_ALWAYS_INLINE void call(double& result, double a) {
+    result = a * (180 / M_PI);
+  }
+};
+
+template <typename T>
 struct SignFunction {
   template <typename TInput>
   FOLLY_ALWAYS_INLINE void call(TInput& result, const TInput& a) {

@@ -33,6 +33,7 @@ void registerSimpleFunctions() {
   registerUnaryNumeric<AbsFunction>({"abs"});
   registerUnaryFloatingPoint<NegateFunction>({"negate"});
   registerFunction<RadiansFunction, double, double>({"radians"});
+  registerFunction<DegreesFunction, double, double>({"degrees"});
   registerUnaryNumeric<RoundFunction>({"round"});
   registerFunction<RoundFunction, int8_t, int8_t, int32_t>({"round"});
   registerFunction<RoundFunction, int16_t, int16_t, int32_t>({"round"});
