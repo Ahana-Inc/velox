@@ -166,6 +166,20 @@ class VectorTestBase {
     return vectorMaker_.flatVector<T>(size, type);
   }
 
+  template <typename T>
+  FlatVectorPtr<T> makeDecimalFlatVector(
+      std::vector<std::optional<T>>& vec,
+      const uint8_t precision,
+      const uint8_t scale) {
+    const TypePtr& type = DECIMAL(precision, scale);
+    VectorPtr base = BaseVector::create(type, vec.size(), pool_.get());
+    auto flatVector = std::dynamic_pointer_cast<FlatVector<T>>(base);
+    for (auto i = 0; i < vec.size(); ++i) {
+      flatVector->set(i, vec[i].value());
+    }
+    return flatVector;
+  }
+
   // Convenience function to create arrayVectors (vector of arrays) based on
   // input values from nested std::vectors. The underlying elements are
   // non-nullable.

@@ -37,6 +37,7 @@
 #include "velox/common/base/ClassName.h"
 #include "velox/common/serialization/Serializable.h"
 #include "velox/type/Date.h"
+#include "velox/type/DecimalUtils.h"
 #include "velox/type/IntervalDayTime.h"
 #include "velox/type/LongDecimal.h"
 #include "velox/type/ShortDecimal.h"
@@ -547,7 +548,11 @@ class Type : public Tree<const std::shared_ptr<const Type>>,
 
 #undef VELOX_FLUENT_CAST
 
+using ShortDecimalType = DecimalType<TypeKind::SHORT_DECIMAL>;
+using LongDecimalType = DecimalType<TypeKind::LONG_DECIMAL>;
 using TypePtr = std::shared_ptr<const Type>;
+using ShortDecimalTypePtr = std::shared_ptr<const ShortDecimalType>;
+using LongDecimalTypePtr = std::shared_ptr<const LongDecimalType>;
 
 template <TypeKind KIND>
 class TypeBase : public Type {
@@ -1747,14 +1752,16 @@ template <>
 inline std::string to(const ShortDecimal& value) {
   // ShortDecimal doesn't have precision and scale information to
   // be serialized into string.
-  VELOX_UNSUPPORTED();
+  // Implementation required for unit tests
+  return std::to_string(value.unscaledValue());
 }
 
 template <>
 inline std::string to(const LongDecimal& value) {
   // LongDecimal doesn't have precision and scale information to
   // be serialized into string.
-  VELOX_UNSUPPORTED();
+  // Implementation required for unit tests
+  return DecimalCasts::Int128ToString(value.unscaledValue());
 }
 
 template <>

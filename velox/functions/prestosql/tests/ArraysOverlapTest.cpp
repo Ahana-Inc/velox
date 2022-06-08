@@ -46,6 +46,32 @@ class ArraysOverlapTest : public FunctionBaseTest {
   }
 
   template <typename T>
+  void testDecimalExpr(
+      const VectorPtr& expected,
+      const std::string& expression,
+      const std::vector<VectorPtr>& input) {
+    VectorPtr result =
+        evaluate<SimpleVector<T>>(expression, makeRowVector(input));
+    assertEqualVectors(expected, result);
+    ASSERT_EQ(result->type()->toString(), expected->type()->toString());
+  }
+
+  void testDecimalAdd() {
+    auto leftVec = std::vector<std::optional<ShortDecimal>>{
+        ShortDecimal(99999999999999999), ShortDecimal(111111111111111111)};
+    auto left = makeDecimalFlatVector<ShortDecimal>(leftVec, 17, 3);
+    auto rightVec = std::vector<std::optional<ShortDecimal>>{
+        ShortDecimal(999999999), ShortDecimal(111111111)};
+    auto right = makeDecimalFlatVector<ShortDecimal>(rightVec, 9, 5);
+    auto expectedVec = std::vector<std::optional<LongDecimal>>{
+        LongDecimal(buildInt128(0, 0x8AC72304C582C99B)),
+        LongDecimal(buildInt128(0, 0x9A3298AFBC4BDD83))};
+    auto expected = makeDecimalFlatVector<LongDecimal>(expectedVec, 20, 5);
+    testDecimalExpr<LongDecimal>(
+        expected, "add_short_short(c0, c1)", {right, left});
+  }
+
+  template <typename T>
   void testInt() {
     auto array1 = makeNullableArrayVector<T>(
         {{1, -2, 3, std::nullopt, 4, 5, 6, std::nullopt},
@@ -94,6 +120,10 @@ class ArraysOverlapTest : public FunctionBaseTest {
   }
 }; // class ArraysOverlap
 } // namespace
+
+TEST_F(ArraysOverlapTest, decimalTest) {
+  testDecimalAdd();
+}
 
 TEST_F(ArraysOverlapTest, intArrays) {
   testInt<int8_t>();
