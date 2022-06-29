@@ -24,7 +24,7 @@ add_library(
   ArrayIntersectExcept.cpp
   ArrayMinMax.cpp
   ArrayPosition.cpp
-  AddDecimalFunctions.cpp
+  DecimalAddFunction.cpp
   ElementAt.cpp
   FilterFunctions.cpp
   FromUnixTime.cpp

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <type/Type.h>
 #include <algorithm>
 #include <cstdint>
 

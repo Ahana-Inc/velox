@@ -299,7 +299,7 @@ template <>
 struct TypeTraits<TypeKind::SHORT_DECIMAL> {
   using ImplType = DecimalType<TypeKind::SHORT_DECIMAL>;
   using NativeType = ShortDecimal;
-  using DeepCopiedType = NativeType;
+  using DeepCopiedType = int64_t;
   static constexpr uint32_t minSubTypes = 0;
   static constexpr uint32_t maxSubTypes = 0;
   static constexpr TypeKind typeKind = TypeKind::SHORT_DECIMAL;
@@ -312,7 +312,7 @@ template <>
 struct TypeTraits<TypeKind::LONG_DECIMAL> {
   using ImplType = DecimalType<TypeKind::LONG_DECIMAL>;
   using NativeType = LongDecimal;
-  using DeepCopiedType = NativeType;
+  using DeepCopiedType = int128_t;
   static constexpr uint32_t minSubTypes = 0;
   static constexpr uint32_t maxSubTypes = 0;
   static constexpr TypeKind typeKind = TypeKind::LONG_DECIMAL;

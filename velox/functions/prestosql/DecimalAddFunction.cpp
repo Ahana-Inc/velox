@@ -16,38 +16,57 @@
 
 #include "velox/expression/VectorFunction.h"
 #include "velox/functions/lib/LambdaFunctionUtil.h"
+#include "velox/functions/prestosql/CheckedArithmeticImpl.h"
 #include "velox/type/DecimalUtils.cpp"
 
 namespace facebook::velox::functions {
 namespace {
 
+template <typename R, typename LHS, typename RHS>
+void call(R& result, LHS& a, RHS& b, uint8_t aRescale, uint8_t bRescale) {
+  result = a * POWERS_OF_TEN[aRescale] + b * POWERS_OF_TEN[bRescale];
+}
+
+template <TypeKind R, TypeKind LHS, TypeKind RHS>
 class DecimalAddFunction : public exec::VectorFunction {
  public:
   DecimalAddFunction(uint8_t aRescale, uint8_t bRescale)
       : aRescale_(aRescale), bRescale_(bRescale) {}
 
+  using ResType = typename TypeTraits<R>::NativeType;
+  using LType = typename TypeTraits<LHS>::NativeType;
+  using RType = typename TypeTraits<RHS>::NativeType;
+
+  using ResInternalType = typename TypeTraits<R>::DeepCopiedType;
+  using LInternalType = typename TypeTraits<LHS>::DeepCopiedType;
+  using RInternalType = typename TypeTraits<RHS>::DeepCopiedType;
+
   void apply(
       const SelectivityVector& rows,
-      std::vector<VectorPtr>& args, // Each arg is Array of integers
+      std::vector<VectorPtr>& args,
       const TypePtr& outputType,
       exec::EvalCtx* context,
       VectorPtr* result) const override {
-    auto num = std::min(args[0]->size(), args[1]->size());
-    auto aFlatVector = args[0]->asFlatVector<ShortDecimal>();
-    auto bFlatVector = args[1]->asFlatVector<ShortDecimal>();
+    memory::MemoryPool* pool = context->pool();
+    BaseVector* left = args[0].get();
+    BaseVector* right = args[1].get();
+
+    auto aFlatVector = args[0]->asFlatVector<LType>();
+    auto bFlatVector = args[1]->asFlatVector<RType>();
     // Initialize flat results vector.
     BaseVector::ensureWritable(rows, outputType, context->pool(), result);
     BufferPtr resultValues =
-        (*result)->as<FlatVector<LongDecimal>>()->mutableValues(rows.size());
-    auto rawValues = resultValues->asMutable<LongDecimal>();
+        (*result)->as<FlatVector<ResType>>()->mutableValues(rows.size());
+    auto rawValues = resultValues->asMutable<ResType>();
 
-    auto processRow = [&](vector_size_t row) {
-      std::vector<int128_t> rescaledValues;
-      // TODO: Rescale the vectors individually with simd instructions.
-      rescale(aFlatVector, bFlatVector, row, rescaledValues);
-      rawValues[row] = LongDecimal(rescaledValues[0] + rescaledValues[1]);
-    };
-    rows.applyToSelected([&](vector_size_t row) { processRow(row); });
+    rows.applyToSelected([&](vector_size_t row) {
+      LInternalType a = aFlatVector->valueAt(row).unscaledValue();
+      RInternalType b = bFlatVector->valueAt(row).unscaledValue();
+      ResInternalType result;
+      call<ResInternalType, LInternalType, RInternalType>(
+          result, a, b, aRescale_, bRescale_);
+      rawValues[row] = ResType(result);
+    });
   }
 
  private:
@@ -93,7 +112,10 @@ std::shared_ptr<exec::VectorFunction> createDecimalAddFunction(
       std::dynamic_pointer_cast<const ShortDecimalType>(inputArgs[1].type);
   uint8_t aRescale = computeRescaleFactor(aType->scale(), bType->scale());
   uint8_t bRescale = computeRescaleFactor(bType->scale(), aType->scale());
-  return std::make_shared<DecimalAddFunction>(aRescale, bRescale);
+  return std::make_shared<DecimalAddFunction<
+      TypeKind::LONG_DECIMAL,
+      TypeKind::SHORT_DECIMAL,
+      TypeKind::SHORT_DECIMAL>>(aRescale, bRescale);
 }
 }; // namespace
 
