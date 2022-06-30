@@ -14,10 +14,46 @@
  * limitations under the License.
  */
 
-#include <type/Type.h>
-#include <algorithm>
-#include <cstdint>
+#include "DecimalUtils.h"
 
-uint8_t computeRescaleFactor(const uint8_t fromScale, const uint8_t toScale) {
-  return std::max(0, toScale - fromScale);
+namespace facebook::velox {
+
+uint8_t computeRescaleFactor(
+    const uint8_t fromScale,
+    const uint8_t toScale,
+    bool& isLeft) {
+  uint8_t rescaleleft = std::max(0, toScale - fromScale);
+  isLeft = true;
+  if (rescaleleft == 0) {
+    isLeft = false;
+    return std::max(0, fromScale - toScale);
+  }
+  return rescaleleft;
 }
+
+void getPrecisionScale(
+    const TypePtr& type,
+    uint8_t& precision,
+    uint8_t& scale) {
+  if (type->kind() == TypeKind::SHORT_DECIMAL) {
+    auto shortDecimalType = type->asShortDecimal();
+    precision = shortDecimalType.precision();
+    scale = shortDecimalType.scale();
+  } else {
+    auto longDecimalType = type->asLongDecimal();
+    precision = longDecimalType.precision();
+    scale = longDecimalType.scale();
+  }
+}
+
+uint8_t computeResultPrecision(
+    const uint8_t aPrecision,
+    const uint8_t aScale,
+    const uint8_t bPrecision,
+    const uint8_t bScale) {
+  return std::min(
+      38,
+      std::max(aPrecision - aScale, bPrecision - bScale) +
+          std::max(aScale, bScale) + 1);
+}
+} // namespace facebook::velox

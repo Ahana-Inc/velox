@@ -23,23 +23,27 @@ namespace facebook::velox::functions {
 namespace {
 
 template <typename R, typename LHS, typename RHS>
-void call(R& result, LHS& a, RHS& b, uint8_t aRescale, uint8_t bRescale) {
-  result = a * POWERS_OF_TEN[aRescale] + b * POWERS_OF_TEN[bRescale];
+void call(R& result, LHS& a, RHS& b, uint8_t rescaleFactor, bool rescaleLeft) {
+  if (rescaleLeft) {
+    result = a * POWERS_OF_TEN[rescaleFactor] + b;
+  } else {
+    result = a + b * POWERS_OF_TEN[rescaleFactor];
+  }
 }
 
 template <TypeKind R, TypeKind LHS, TypeKind RHS>
 class DecimalAddFunction : public exec::VectorFunction {
  public:
-  DecimalAddFunction(uint8_t aRescale, uint8_t bRescale)
-      : aRescale_(aRescale), bRescale_(bRescale) {}
+  DecimalAddFunction(uint8_t rescale, bool rescaleLeft)
+      : rescaleFactor_(rescale), rescaleLeft_(rescaleLeft) {}
 
-  using ResType = typename TypeTraits<R>::NativeType;
-  using LType = typename TypeTraits<LHS>::NativeType;
-  using RType = typename TypeTraits<RHS>::NativeType;
+  using ResNativeType = typename TypeTraits<R>::NativeType;
+  using LHSNativeType = typename TypeTraits<LHS>::NativeType;
+  using RHSNativeType = typename TypeTraits<RHS>::NativeType;
 
-  using ResInternalType = typename TypeTraits<R>::DeepCopiedType;
-  using LInternalType = typename TypeTraits<LHS>::DeepCopiedType;
-  using RInternalType = typename TypeTraits<RHS>::DeepCopiedType;
+  using ResDeepCopiedType = typename TypeTraits<R>::DeepCopiedType;
+  using LDeepCopiedType = typename TypeTraits<LHS>::DeepCopiedType;
+  using RDeepCopiedType = typename TypeTraits<RHS>::DeepCopiedType;
 
   void apply(
       const SelectivityVector& rows,
@@ -51,43 +55,27 @@ class DecimalAddFunction : public exec::VectorFunction {
     BaseVector* left = args[0].get();
     BaseVector* right = args[1].get();
 
-    auto aFlatVector = args[0]->asFlatVector<LType>();
-    auto bFlatVector = args[1]->asFlatVector<RType>();
+    auto aFlatVector = args[0]->asFlatVector<LHSNativeType>();
+    auto bFlatVector = args[1]->asFlatVector<RHSNativeType>();
     // Initialize flat results vector.
     BaseVector::ensureWritable(rows, outputType, context->pool(), result);
     BufferPtr resultValues =
-        (*result)->as<FlatVector<ResType>>()->mutableValues(rows.size());
-    auto rawValues = resultValues->asMutable<ResType>();
+        (*result)->as<FlatVector<ResNativeType>>()->mutableValues(rows.size());
+    auto rawValues = resultValues->asMutable<ResNativeType>();
 
     rows.applyToSelected([&](vector_size_t row) {
-      LInternalType a = aFlatVector->valueAt(row).unscaledValue();
-      RInternalType b = bFlatVector->valueAt(row).unscaledValue();
-      ResInternalType result;
-      call<ResInternalType, LInternalType, RInternalType>(
-          result, a, b, aRescale_, bRescale_);
-      rawValues[row] = ResType(result);
+      LDeepCopiedType a = aFlatVector->valueAt(row).unscaledValue();
+      RDeepCopiedType b = bFlatVector->valueAt(row).unscaledValue();
+      ResDeepCopiedType result;
+      call<ResDeepCopiedType, LDeepCopiedType, RDeepCopiedType>(
+          result, a, b, rescaleFactor_, rescaleLeft_);
+      rawValues[row] = ResNativeType(result);
     });
   }
 
  private:
-  void rescale(
-      FlatVector<ShortDecimal>* aFlatVector,
-      FlatVector<ShortDecimal>* bFlatVector,
-      const vector_size_t i,
-      std::vector<int128_t>& rescaled) const {
-    rescaled.push_back(
-        aFlatVector->isNullAt(i)
-            ? 0
-            : ((int128_t)aFlatVector->valueAt(i).unscaledValue()) *
-                (int128_t)pow(10, aRescale_));
-    rescaled.push_back(
-        bFlatVector->isNullAt(i)
-            ? 0
-            : ((int128_t)bFlatVector->valueAt(i).unscaledValue()) *
-                (int128_t)pow(10, bRescale_));
-  }
-  const uint8_t aRescale_;
-  const uint8_t bRescale_;
+  const uint8_t rescaleFactor_;
+  const bool rescaleLeft_;
 };
 
 std::vector<std::shared_ptr<exec::FunctionSignature>> decimalAddSignature() {
@@ -106,22 +94,58 @@ std::vector<std::shared_ptr<exec::FunctionSignature>> decimalAddSignature() {
 std::shared_ptr<exec::VectorFunction> createDecimalAddFunction(
     const std::string& name,
     const std::vector<exec::VectorFunctionArg>& inputArgs) {
-  ShortDecimalTypePtr aType =
-      std::dynamic_pointer_cast<const ShortDecimalType>(inputArgs[0].type);
-  ShortDecimalTypePtr bType =
-      std::dynamic_pointer_cast<const ShortDecimalType>(inputArgs[1].type);
-  uint8_t aRescale = computeRescaleFactor(aType->scale(), bType->scale());
-  uint8_t bRescale = computeRescaleFactor(bType->scale(), aType->scale());
-  return std::make_shared<DecimalAddFunction<
-      TypeKind::LONG_DECIMAL,
-      TypeKind::SHORT_DECIMAL,
-      TypeKind::SHORT_DECIMAL>>(aRescale, bRescale);
+  auto aType = inputArgs[0].type;
+  auto bType = inputArgs[1].type;
+  uint8_t aScale, bScale, aPrecision, bPrecision;
+  getPrecisionScale(aType, aPrecision, aScale);
+  getPrecisionScale(bType, bPrecision, bScale);
+  bool rescaleLeft = true;
+  uint8_t rescale = computeRescaleFactor(aScale, bScale, rescaleLeft);
+  uint8_t resultPrescision =
+      computeResultPrecision(aPrecision, aScale, bPrecision, bScale);
+  if (aType->kind() == TypeKind::SHORT_DECIMAL) {
+    if (bType->kind() == TypeKind::SHORT_DECIMAL) {
+      if (resultPrescision > ShortDecimalType::kMaxPrecision) {
+        // Add two short decimals and result is a long decimal.
+        return std::make_shared<DecimalAddFunction<
+            TypeKind::LONG_DECIMAL /*result*/,
+            TypeKind::SHORT_DECIMAL,
+            TypeKind::SHORT_DECIMAL>>(rescale, rescaleLeft);
+
+      } else {
+        // Add two short decimals and result is a short decimal.
+        return std::make_shared<DecimalAddFunction<
+            TypeKind::SHORT_DECIMAL /*result*/,
+            TypeKind::SHORT_DECIMAL,
+            TypeKind::SHORT_DECIMAL>>(rescale, rescaleLeft);
+      }
+    } else {
+      // Add a short decimal and long decimal, result is long decimal.
+      return std::make_shared<DecimalAddFunction<
+          TypeKind::LONG_DECIMAL /*result*/,
+          TypeKind::SHORT_DECIMAL,
+          TypeKind::LONG_DECIMAL>>(rescale, rescaleLeft);
+    }
+  } else {
+    if (bType->kind() == TypeKind::SHORT_DECIMAL) {
+      // Add long decimal and short decimals, result is a long decimal.
+      return std::make_shared<DecimalAddFunction<
+          TypeKind::LONG_DECIMAL /*result*/,
+          TypeKind::LONG_DECIMAL,
+          TypeKind::SHORT_DECIMAL>>(rescale, rescaleLeft);
+    } else {
+      return std::make_shared<DecimalAddFunction<
+          TypeKind::LONG_DECIMAL /*result*/,
+          TypeKind::LONG_DECIMAL,
+          TypeKind::LONG_DECIMAL>>(rescale, rescaleLeft);
+    }
+  }
+  VELOX_UNSUPPORTED();
 }
 }; // namespace
 
 VELOX_DECLARE_STATEFUL_VECTOR_FUNCTION(
-    udf_add_short_short,
+    udf_decimal_add,
     decimalAddSignature(),
     createDecimalAddFunction);
-
 }; // namespace facebook::velox::functions
