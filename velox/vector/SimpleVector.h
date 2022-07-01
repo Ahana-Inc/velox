@@ -27,6 +27,7 @@
 #include <glog/logging.h>
 
 #include "velox/functions/lib/string/StringCore.h"
+#include "velox/type/DecimalUtils.h"
 #include "velox/type/Type.h"
 #include "velox/vector/BaseVector.h"
 #include "velox/vector/TypeAliases.h"
@@ -182,7 +183,12 @@ class SimpleVector : public BaseVector {
       if constexpr (std::is_same<T, std::shared_ptr<void>>::value) {
         VELOX_NYI("Can't serialize opaque objects yet");
       } else {
-        out << velox::to<std::string>(valueAt(index));
+        if (this->typeKind() == TypeKind::SHORT_DECIMAL ||
+            this->typeKind() == TypeKind::LONG_DECIMAL) {
+          out << decimalToString<T>(valueAt(index), type());
+        } else {
+          out << velox::to<std::string>(valueAt(index));
+        }
       }
     }
     return out.str();

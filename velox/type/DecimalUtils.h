@@ -19,6 +19,8 @@
 #include <string>
 #include "velox/common/base/Exceptions.h"
 #include "velox/type/LongDecimal.h"
+#include "velox/type/ShortDecimal.h"
+#include "velox/type/Type.h"
 
 namespace facebook::velox {
 
@@ -68,7 +70,8 @@ class DecimalCasts {
   static std::string ShortDecimalToString(
       uint8_t precision,
       uint8_t scale,
-      int64_t unscaledValue) {
+      const ShortDecimal& shortDecimalValue) {
+    auto unscaledValue = shortDecimalValue.unscaledValue();
     std::string result;
     if (unscaledValue < 0) {
       result.append("-");
@@ -83,8 +86,9 @@ class DecimalCasts {
   static std::string LongDecimalToString(
       uint8_t precision,
       uint8_t scale,
-      int128_t unscaledValue) {
+      const LongDecimal& longDecimal) {
     std::string result;
+    auto unscaledValue = longDecimal.unscaledValue();
     if (unscaledValue < 0) {
       result.append("-");
       unscaledValue = ~unscaledValue + 1;
@@ -134,4 +138,28 @@ class DecimalCasts {
     return result;
   }
 }; // DecimalCasts
+
+template <typename T>
+inline std::string decimalToString(const T& value, const TypePtr& type) {
+  VELOX_UNSUPPORTED();
+}
+
+template <>
+inline std::string decimalToString<LongDecimal>(
+    const LongDecimal& value,
+    const TypePtr& type) {
+  auto decimalType = type->asLongDecimal();
+  return DecimalCasts::LongDecimalToString(
+      decimalType.precision(), decimalType.scale(), value);
+}
+
+template <>
+inline std::string decimalToString<ShortDecimal>(
+    const ShortDecimal& value,
+    const TypePtr& type) {
+  auto decimalType = type->asShortDecimal();
+  return DecimalCasts::ShortDecimalToString(
+      decimalType.precision(), decimalType.scale(), value);
+}
+
 } // namespace facebook::velox

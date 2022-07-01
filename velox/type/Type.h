@@ -37,7 +37,6 @@
 #include "velox/common/base/ClassName.h"
 #include "velox/common/serialization/Serializable.h"
 #include "velox/type/Date.h"
-#include "velox/type/DecimalUtils.h"
 #include "velox/type/IntervalDayTime.h"
 #include "velox/type/LongDecimal.h"
 #include "velox/type/ShortDecimal.h"
@@ -1752,16 +1751,14 @@ template <>
 inline std::string to(const ShortDecimal& value) {
   // ShortDecimal doesn't have precision and scale information to
   // be serialized into string.
-  // Implementation required for unit tests
-  return std::to_string(value.unscaledValue());
+  VELOX_UNSUPPORTED();
 }
 
 template <>
 inline std::string to(const LongDecimal& value) {
   // LongDecimal doesn't have precision and scale information to
   // be serialized into string.
-  // Implementation required for unit tests
-  return DecimalCasts::Int128ToString(value.unscaledValue());
+  VELOX_UNSUPPORTED();
 }
 
 template <>
