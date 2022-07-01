@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "velox/expression/DecodedArgs.h"
 #include "velox/expression/VectorFunction.h"
 #include "velox/functions/lib/LambdaFunctionUtil.h"
 #include "velox/functions/prestosql/CheckedArithmeticImpl.h"
@@ -45,6 +46,10 @@ class DecimalAddFunction : public exec::VectorFunction {
   using LDeepCopiedType = typename TypeTraits<LHS>::DeepCopiedType;
   using RDeepCopiedType = typename TypeTraits<RHS>::DeepCopiedType;
 
+  bool isDefaultNullBehavior() const override {
+    return true;
+  }
+
   void apply(
       const SelectivityVector& rows,
       std::vector<VectorPtr>& args,
@@ -55,8 +60,9 @@ class DecimalAddFunction : public exec::VectorFunction {
     BaseVector* left = args[0].get();
     BaseVector* right = args[1].get();
 
-    auto aFlatVector = args[0]->asFlatVector<LHSNativeType>();
-    auto bFlatVector = args[1]->asFlatVector<RHSNativeType>();
+    exec::DecodedArgs decodedArgs(rows, args, context);
+    auto aDecodedVector = decodedArgs.at(0);
+    auto bDecodedVector = decodedArgs.at(1);
     // Initialize flat results vector.
     BaseVector::ensureWritable(rows, outputType, context->pool(), result);
     BufferPtr resultValues =
@@ -64,8 +70,10 @@ class DecimalAddFunction : public exec::VectorFunction {
     auto rawValues = resultValues->asMutable<ResNativeType>();
 
     rows.applyToSelected([&](vector_size_t row) {
-      LDeepCopiedType a = aFlatVector->valueAt(row).unscaledValue();
-      RDeepCopiedType b = bFlatVector->valueAt(row).unscaledValue();
+      LDeepCopiedType a =
+          aDecodedVector->valueAt<LHSNativeType>(row).unscaledValue();
+      RDeepCopiedType b =
+          bDecodedVector->valueAt<RHSNativeType>(row).unscaledValue();
       ResDeepCopiedType result;
       call<ResDeepCopiedType, LDeepCopiedType, RDeepCopiedType>(
           result, a, b, rescaleFactor_, rescaleLeft_);
