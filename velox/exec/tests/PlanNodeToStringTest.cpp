@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "velox/exec/WindowFunction.h"
 #include "velox/exec/tests/utils/HiveConnectorTestBase.h"
 #include "velox/exec/tests/utils/PlanBuilder.h"
 #include "velox/functions/prestosql/registration/RegistrationFunctions.h"
@@ -500,4 +501,47 @@ TEST_F(PlanNodeToStringTest, tableScan) {
         "-> discount:DOUBLE, quantity:DOUBLE, shipdate:VARCHAR, comment:VARCHAR\n",
         plan->toString(true, false));
   }
+}
+
+TEST_F(PlanNodeToStringTest, window) {
+  std::vector<exec::FunctionSignaturePtr> signatures{
+      exec::FunctionSignatureBuilder()
+          .argumentType("BIGINT")
+          .returnType("BIGINT")
+          .build(),
+  };
+  exec::registerWindowFunction("window1", std::move(signatures), nullptr);
+
+  PlanBuilder::WindowFrame frame = {
+      core::WindowNode::WindowType::kRange,
+      core::WindowNode::BoundType::kPreceding,
+      "10",
+      core::WindowNode::BoundType::kFollowing,
+      "b"};
+  auto plan =
+      PlanBuilder()
+          .tableScan(ROW({"a", "b", "c"}, {VARCHAR(), BIGINT(), BIGINT()}))
+          .window({"a"}, {"b"}, {"window1(c) AS d"}, {frame})
+          .planNode();
+  ASSERT_EQ(
+      "-- Window[partition by: [a] order by: [b ASC NULLS LAST] "
+      "d := window1(ROW[\"c\"]) RANGE 10 PRECEDING ROW[\"b\"] FOLLOWING] "
+      "-> a:VARCHAR, b:BIGINT, c:BIGINT, d:BIGINT\n",
+      plan->toString(true, false));
+
+  PlanBuilder::WindowFrame frame2 = {
+      core::WindowNode::WindowType::kRange,
+      core::WindowNode::BoundType::kCurrentRow,
+      std::nullopt,
+      core::WindowNode::BoundType::kFollowing,
+      "b"};
+  plan = PlanBuilder()
+             .tableScan(ROW({"a", "b", "c"}, {VARCHAR(), BIGINT(), BIGINT()}))
+             .window({"a"}, {"b"}, {"window1(c) AS d"}, {frame2})
+             .planNode();
+  ASSERT_EQ(
+      "-- Window[partition by: [a] order by: [b ASC NULLS LAST] "
+      "d := window1(ROW[\"c\"]) RANGE CURRENT_ROW ROW[\"b\"] FOLLOWING] "
+      "-> a:VARCHAR, b:BIGINT, c:BIGINT, d:BIGINT\n",
+      plan->toString(true, false));
 }
