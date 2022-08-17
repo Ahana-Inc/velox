@@ -36,6 +36,31 @@ class WindowPartition {
 
   void resetPartition(const folly::Range<char**>& rows);
 
+  // Extracts into the result VectorPtr (starting from resultOffset),
+  // values from column at index 'idx' and at row numbers in
+  // 'rowNumbers' buffer. This API is useful for Value functions like NthValue
+  // that are just extracting column values but are not interested in
+  // them. Nulls at corresponding positions are copied.
+  void extractColumn(vector_size_t idx, vector_size_t numRows, VectorPtr result)
+      const;
+
+  void extractColumn(
+      vector_size_t idx,
+      vector_size_t numRows,
+      vector_size_t offset,
+      VectorPtr result) const;
+
+  // Extracts into the result VectorPtr (starting from resultOffset),
+  // values from column at index 'idx' and at row numbers in
+  // 'rowNumbers' buffer. This API is useful for Value functions like NthValue
+  // that are just extracting column values but are not interested in
+  // them. Nulls at corresponding positions are copied.
+  void extractColumn(
+      vector_size_t idx,
+      const BufferPtr& rowNumbers,
+      vector_size_t resultOffset,
+      VectorPtr result) const;
+
  private:
   // This is a copy of the input RowColumn objects that are used for
   // accessing the partition row columns. These RowColumn objects
