@@ -333,17 +333,33 @@ void Window::callApplyForPartitionRows(
   auto firstPartitionRow = partitionStartRows_[currentPartition_];
   auto lastPartitionRow = partitionStartRows_[currentPartition_ + 1] - 1;
   for (auto i = startRow, j = 0; i < endRow; i++, j++) {
-    // TODO : Compute peerStart and peerEnd values. Assuming a default
-    // of all rows in each partition being peers for now.
-    auto peerStartRow = firstPartitionRow;
-    auto peerEndRow = lastPartitionRow;
+    // When traversing input partition rows, the peers are the rows
+    // with the same values for the ORDER BY clause. These rows
+    // are equal in some ways and affect the results of ranking functions.
+    // This logic exploits the fact that all rows between the peerStartRow_
+    // and peerEndRow_ have the same values for peerStartRow_ and peerEndRow_.
+    // So we can compute them just once and reuse across the rows in that peer
+    // interval.
+
+    // Compute peerStart and peerEnd rows for the first row of the partition or
+    // when past the previous peerGroup.
+    if (i == firstPartitionRow || i >= peerEndRow_) {
+      peerStartRow_ = i;
+      peerEndRow_ = i;
+      while (peerEndRow_ <= lastPartitionRow) {
+        if (peerCompare(sortedRows_[peerStartRow_], sortedRows_[peerEndRow_])) {
+          break;
+        }
+        peerEndRow_++;
+      }
+    }
 
     // The peer and frame values set in the WindowFunction::apply buffers
     // are the offsets within the current partition, whereas all the row
     // numbers in the logic are wrt sortedRows_ ordering. So we need to
     // adjust for the first row of the partition.
-    rawPeerStartBuffer[j] = peerStartRow - firstPartitionRow;
-    rawPeerEndBuffer[j] = peerEndRow - 1 - firstPartitionRow;
+    rawPeerStartBuffer[j] = peerStartRow_ - firstPartitionRow;
+    rawPeerEndBuffer[j] = peerEndRow_ - 1 - firstPartitionRow;
 
     for (auto w = 0; w < numFuncs; w++) {
       auto frameEndPoints = findFrameEndPoints(w, firstPartitionRow, endRow, i);

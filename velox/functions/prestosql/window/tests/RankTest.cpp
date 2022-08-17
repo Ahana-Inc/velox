@@ -24,10 +24,9 @@ namespace facebook::velox::window::test {
 
 namespace {
 
-class RowNumberTest : public OperatorTestBase {
+class RankTest : public OperatorTestBase {
  protected:
   void SetUp() {
-    exec::test::OperatorTestBase::SetUp();
     velox::window::registerWindowFunctions();
   }
 
@@ -59,7 +58,7 @@ class RowNumberTest : public OperatorTestBase {
   folly::Random::DefaultGenerator rng_;
 };
 
-TEST_F(RowNumberTest, basic) {
+TEST_F(RankTest, basic) {
   auto testWindowSql = [&](const RowVectorPtr& input,
                            const std::string& windowSql) -> void {
     VELOX_CHECK_GE(input->size(), 2);
@@ -76,34 +75,27 @@ TEST_F(RowNumberTest, basic) {
 
   auto basicTests = [&](const RowVectorPtr& vectors) -> void {
     testWindowSql(
-        vectors,
-        "row_number() over (partition by c0 order by c1) as row_number_partition");
+        vectors, "rank() over (partition by c0 order by c1) as rank_partition");
+    testWindowSql(
+        vectors, "rank() over (partition by c1 order by c0) as rank_partition");
     testWindowSql(
         vectors,
-        "row_number() over (partition by c1 order by c0) as row_number_partition");
+        "rank() over (partition by c0 order by c1 desc) as rank_partition");
     testWindowSql(
         vectors,
-        "row_number() over (partition by c0 order by c1 desc) as row_number_partition");
-    testWindowSql(
-        vectors,
-        "row_number() over (partition by c1 order by c0 desc) as row_number_partition");
+        "rank() over (partition by c1 order by c0 desc) as rank_partition");
 
     // No partition clause
+    testWindowSql(vectors, "rank() over (order by c0, c1) as rank_partition");
+    testWindowSql(vectors, "rank() over (order by c1, c0) as rank_partition");
     testWindowSql(
-        vectors, "row_number() over (order by c0, c1) as row_number_partition");
+        vectors, "rank() over (order by c0 asc, c1 desc) as rank_partition");
     testWindowSql(
-        vectors, "row_number() over (order by c1, c0) as row_number_partition");
-    testWindowSql(
-        vectors,
-        "row_number() over (order by c0 asc, c1 desc) as row_number_partition");
-    testWindowSql(
-        vectors,
-        "row_number() over (order by c1 asc, c0 desc) as row_number_partition");
+        vectors, "rank() over (order by c1 asc, c0 desc) as rank_partition");
 
     // No order by clause
     testWindowSql(
-        vectors,
-        "row_number() over (partition by c0, c1) as row_number_partition");
+        vectors, "rank() over (partition by c0, c1) as rank_partition");
   };
 
   vector_size_t size = 100;
@@ -133,7 +125,7 @@ TEST_F(RowNumberTest, basic) {
   basicTests(vectors);
 }
 
-TEST_F(RowNumberTest, randomGen) {
+TEST_F(RankTest, randomGen) {
   auto vectors = makeVectors(rowType_, 10, 1);
   createDuckDbTable(vectors);
 
@@ -158,24 +150,23 @@ TEST_F(RowNumberTest, randomGen) {
 
   testWindowSql(
       vectors,
-      "row_number() over (partition by c0 order by c1, c2, c3) as row_number_partition");
+      "rank() over (partition by c0 order by c1, c2, c3) as rank_partition");
   testWindowSql(
       vectors,
-      "row_number() over (partition by c1 order by c0, c2, c3) as row_number_partition");
+      "rank() over (partition by c1 order by c0, c2, c3) as rank_partition");
   testWindowSql(
       vectors,
-      "row_number() over (partition by c0 order by c1 desc, c2, c3) as row_number_partition");
+      "rank() over (partition by c0 order by c1 desc, c2, c3) as rank_partition");
   testWindowSql(
       vectors,
-      "row_number() over (partition by c1 order by c0 desc, c2, c3) as row_number_partition");
+      "rank() over (partition by c1 order by c0 desc, c2, c3) as rank_partition");
+
+  testWindowSql(
+      vectors, "rank() over (order by c0, c1, c2, c3) as rank_partition");
 
   testWindowSql(
       vectors,
-      "row_number() over (order by c0, c1, c2, c3) as row_number_partition");
-
-  testWindowSql(
-      vectors,
-      "row_number() over (partition by c0, c1, c2, c3) as row_number_partition");
+      "rank() over (partition by c0, c1, c2, c3) as row_number_partition");
 }
 
 }; // namespace
