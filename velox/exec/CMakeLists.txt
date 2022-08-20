@@ -58,6 +58,7 @@ add_library(
   Window.cpp
   WindowFunction.cpp
   WindowPartition.cpp
+  WindowRowStore.cpp
   AssignUniqueId.cpp)
 
 target_link_libraries(

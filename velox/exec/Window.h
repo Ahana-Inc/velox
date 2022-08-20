@@ -18,7 +18,7 @@
 #include "velox/exec/Operator.h"
 #include "velox/exec/RowContainer.h"
 #include "velox/exec/WindowFunction.h"
-#include "velox/exec/WindowPartition.h"
+#include "velox/exec/WindowRowStore.h"
 
 namespace facebook::velox::exec {
 
@@ -79,22 +79,6 @@ class Window : public Operator {
   // row indices to send in window function apply invocations.
   void createPeerAndFrameBuffers();
 
-  // Function to compute the partitionStartRows_ structure.
-  // partitionStartRows_ is vector of the starting rows index
-  // of each partition in the data. This is an auxiliary
-  // structure that helps simplify the window function computations.
-  void computePartitionStartRows();
-
-  // This function is invoked after receiving all the input data.
-  // The input data needs to be separated into partitions and
-  // ordered within it (as that is the order in which the rows
-  // will be output for the partition).
-  // This function achieves this by ordering the input rows by
-  // (partition keys + order by keys). Doing so orders all rows
-  // of a partition adjacent to each other and sorted by the
-  // ORDER BY clause.
-  void sortPartitions();
-
   // Helper function to call WindowFunction::resetPartition() for
   // all WindowFunctions.
   void callResetPartition(vector_size_t partitionNumber);
@@ -126,14 +110,6 @@ class Window : public Operator {
       vector_size_t partitionEndRow,
       vector_size_t currentRow);
 
-  // Helper function to compare the rows at lhs and rhs pointers
-  // using the keyInfo in keys. This can be used to compare the
-  // rows for partitionKeys, orderByKeys or a combination of both.
-  inline bool compareRowsWithKeys(
-      const char* lhs,
-      const char* rhs,
-      const std::vector<std::pair<column_index_t, core::SortOrder>>& keys);
-
   // Function to compute window function values for the current output
   // buffer. The buffer has numOutputRows number of rows. windowOutputs
   // has the vectors for window function columns.
@@ -142,29 +118,17 @@ class Window : public Operator {
       const std::vector<VectorPtr>& windowOutputs);
 
   bool finished_ = false;
-  const vector_size_t outputBatchSizeInBytes_;
   const vector_size_t numInputColumns_;
 
-  // The Window operator needs to see all the input rows before starting
-  // any function computation. As the Window operators gets input rows
-  // we store the rows in the RowContainer (data_).
-  std::unique_ptr<RowContainer> data_;
-  // The decodedInputVectors_ are reused across addInput() calls to decode
-  // the partition and sort keys for the above RowContainer.
-  std::vector<DecodedVector> decodedInputVectors_;
+  const vector_size_t outputBatchSizeInBytes_;
+  // Number of rows that be fit into an output block.
+  vector_size_t numRowsPerOutput_;
 
-  // The below 3 vectors represent the ChannelIndex of the partition keys,
-  // the order by keys and the concatenation of the 2. These keyInfo are
-  // used for sorting by those key combinations during the processing.
-  // partitionKeyInfo_ is used to separate partitions in the rows.
-  // sortKeyInfo_ is used to identify peer rows in a partition.
-  // allKeyInfo_ is a combination of (partitionKeyInfo_ and sortKeyInfo_).
-  // It is used to perform a full sorting of the input rows to be able to
-  // separate partitions and sort the rows in it. The rows are output in
-  // this order by the operator.
-  std::vector<std::pair<column_index_t, core::SortOrder>> partitionKeyInfo_;
-  std::vector<std::pair<column_index_t, core::SortOrder>> sortKeyInfo_;
-  std::vector<std::pair<column_index_t, core::SortOrder>> allKeyInfo_;
+  // The Window operator needs to accumulate all input rows,
+  // process them into partitions, order the partitions and
+  // output them. The WindowRowStore is used to achieve these
+  // functions.
+  std::unique_ptr<WindowRowStore> rowStore_;
 
   // Vector of WindowFunction objects required by this operator.
   // WindowFunction is the base API implemented by all the window functions.
@@ -173,30 +137,6 @@ class Window : public Operator {
   // Vector of WindowFrames corresponding to each windowFunction above.
   // It represents the frame spec for the function computation.
   std::vector<WindowFrame> windowFrames_;
-
-  // This SelectivityVector is used across addInput calls for decoding.
-  SelectivityVector inputRows_;
-  // Number of input rows.
-  vector_size_t numRows_ = 0;
-
-  // Vector of pointers to each input row in the data_ RowContainer.
-  // The rows are sorted by partitionKeys + sortKeys. This total
-  // ordering can be used to split partitions (with the correct
-  // order by) for the processing.
-  std::vector<char*> sortedRows_;
-
-  // Window partition object used to provide per-partition
-  // data to the window function.
-  std::unique_ptr<WindowPartition> windowPartition_;
-
-  // Number of rows that be fit into an output block.
-  vector_size_t numRowsPerOutput_;
-
-  // This is a vector that gives the index of the start row
-  // (in sortedRows_) of each partition in the RowContainer data_.
-  // This auxiliary structure helps demarcate partitions in
-  // getOutput calls.
-  std::vector<vector_size_t> partitionStartRows_;
 
   // The following 4 Buffers are used to pass peer and frame start and
   // end values to the WindowFunction::apply method. These
@@ -212,15 +152,19 @@ class Window : public Operator {
   std::vector<BufferPtr> frameStartBuffers_;
   std::vector<BufferPtr> frameEndBuffers_;
 
-  // Number of rows output from the WindowOperator so far. The rows
-  // are output in the same order of the pointers in sortedRows. This
-  // value is updated as the WindowFunction::apply() function is
-  // called on the partition blocks.
+  // Number of input rows.
+  vector_size_t numRows_ = 0;
+
+  // Number of rows output from the WindowOperator so far.
   vector_size_t numProcessedRows_ = 0;
-  // Current partition being output. The partition might be
-  // output across multiple getOutput() calls so this needs to
-  // be tracked in the operator.
-  vector_size_t currentPartition_;
+
+  // The below 2 variables are related to the current partition
+  // being output. As the partition might be output across
+  // multiple getOutput() calls, so they are tracked in the operator.
+  // Total number of rows in the current partition.
+  vector_size_t numPartitionRows_;
+  // Number of rows of the current partition that have been output.
+  vector_size_t numPartitionProcessedRows_;
 
   // When traversing input partition rows, the peers are the rows
   // with the same values for the ORDER BY clause. These rows
