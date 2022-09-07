@@ -21,17 +21,64 @@
 namespace facebook::velox::exec {
 
 namespace {
+vector_size_t findFrameEndPointUnboundedPreceding(
+    core::WindowNode::WindowType /*type*/,
+    vector_size_t /*functionNumber*/,
+    vector_size_t partitionStartRow,
+    vector_size_t /*partitionEndRow*/,
+    vector_size_t /*currentRow*/,
+    std::optional<column_index_t> channel) {
+  return partitionStartRow;
+}
 
-void checkDefaultWindowFrame(const core::WindowNode::Function& windowFunction) {
-  VELOX_CHECK_EQ(
-      windowFunction.frame.type, core::WindowNode::WindowType::kRange);
-  VELOX_CHECK_EQ(
-      windowFunction.frame.startType,
-      core::WindowNode::BoundType::kUnboundedPreceding);
-  VELOX_CHECK_EQ(
-      windowFunction.frame.endType, core::WindowNode::BoundType::kCurrentRow);
-  VELOX_CHECK_EQ(windowFunction.frame.startValue, nullptr);
-  VELOX_CHECK_EQ(windowFunction.frame.endValue, nullptr);
+vector_size_t findFrameEndPointKPreceding(
+    core::WindowNode::WindowType type,
+    vector_size_t functionNumber,
+    vector_size_t partitionStartRow,
+    vector_size_t /*partitionEndRow*/,
+    vector_size_t currentRow,
+    std::optional<column_index_t> channel) {
+  auto frameStartValue = channel;
+  if (!frameStartValue || type != core::WindowNode::WindowType::kRows) {
+    VELOX_FAIL("k preceding as frame start is allowed only in ROWS mode");
+  }
+  return std::max(
+      currentRow - vector_size_t(*frameStartValue), partitionStartRow);
+}
+
+vector_size_t findFrameEndPointCurrentRow(
+    core::WindowNode::WindowType /*type*/,
+    vector_size_t /*functionNumber*/,
+    vector_size_t /*partitionStartRow*/,
+    vector_size_t /*partitionEndRow*/,
+    vector_size_t currentRow,
+    std::optional<column_index_t> channel) {
+  return currentRow;
+}
+
+vector_size_t findFrameEndPointKFollowing(
+    core::WindowNode::WindowType type,
+    vector_size_t functionNumber,
+    vector_size_t /*partitionStartRow*/,
+    vector_size_t partitionEndRow,
+    vector_size_t currentRow,
+    std::optional<column_index_t> channel) {
+  auto frameEndValue = channel;
+  if (!frameEndValue || type != core::WindowNode::WindowType::kRows) {
+    VELOX_FAIL("k preceding as frame end is allowed only in ROWS mode");
+  }
+  return std::min(
+      currentRow + vector_size_t(*frameEndValue), partitionEndRow - 1);
+}
+
+vector_size_t findFrameEndPointUnboundedFollowing(
+    core::WindowNode::WindowType /*type*/,
+    vector_size_t /*functionNumber*/,
+    vector_size_t /*partitionStartRow*/,
+    vector_size_t partitionEndRow,
+    vector_size_t /*currentRow*/,
+    std::optional<column_index_t> channel) {
+  return partitionEndRow - 1;
 }
 
 }; // namespace
@@ -89,8 +136,6 @@ void Window::createWindowFunctions(
         windowNodeFunction.functionCall->type(),
         operatorCtx_->pool()));
 
-    checkDefaultWindowFrame(windowNodeFunction);
-
     windowFrames_.push_back(
         {windowNodeFunction.frame.type,
          windowNodeFunction.frame.startType,
@@ -103,6 +148,48 @@ void Window::createWindowFunctions(
 void Window::addInput(RowVectorPtr input) {
   rowStore_->addInput(input);
   numRows_ += input->size();
+}
+
+void setWindowFrameStart(
+    core::WindowNode::BoundType startType,
+    windowFrameFunctionPtr& windowFrameFunction) {
+  switch (startType) {
+    case core::WindowNode::BoundType::kUnboundedPreceding:
+      windowFrameFunction = &findFrameEndPointUnboundedPreceding;
+      break;
+    case core::WindowNode::BoundType::kPreceding:
+      windowFrameFunction = &findFrameEndPointKPreceding;
+      break;
+    case core::WindowNode::BoundType::kCurrentRow:
+      windowFrameFunction = findFrameEndPointCurrentRow;
+      break;
+    case core::WindowNode::BoundType::kFollowing:
+      windowFrameFunction = &findFrameEndPointKFollowing;
+      break;
+    default:
+      VELOX_FAIL("Invalid frame start value");
+  }
+}
+
+void setWindowFrameEnd(
+    core::WindowNode::BoundType endType,
+    windowFrameFunctionPtr& windowFrameFunction) {
+  switch (endType) {
+    case core::WindowNode::BoundType::kPreceding:
+      windowFrameFunction = &findFrameEndPointKPreceding;
+      break;
+    case core::WindowNode::BoundType::kCurrentRow:
+      windowFrameFunction = &findFrameEndPointCurrentRow;
+      break;
+    case core::WindowNode::BoundType::kFollowing:
+      windowFrameFunction = &findFrameEndPointKFollowing;
+      break;
+    case core::WindowNode::BoundType::kUnboundedFollowing:
+      windowFrameFunction = &findFrameEndPointUnboundedFollowing;
+      break;
+    default:
+      VELOX_FAIL("Invalid frame end value");
+  }
 }
 
 void Window::createPeerAndFrameBuffers() {
@@ -127,6 +214,13 @@ void Window::createPeerAndFrameBuffers() {
         numRowsPerOutput_, operatorCtx_->pool());
     frameStartBuffers_.push_back(frameStartBuffer);
     frameEndBuffers_.push_back(frameEndBuffer);
+
+    windowFrameFunctionPtr windowFrameStart;
+    windowFrameFunctionPtr windowFrameEnd;
+    setWindowFrameStart(windowFrames_[i].startType, windowFrameStart);
+    setWindowFrameEnd(windowFrames_[i].endType, windowFrameEnd);
+    windowFunctions_[i]->setFrameStartBoundFunction(windowFrameStart);
+    windowFunctions_[i]->setFrameEndBoundFunction(windowFrameEnd);
   }
 }
 
@@ -147,18 +241,6 @@ void Window::noMoreInput() {
   createPeerAndFrameBuffers();
 
   callResetPartition(0);
-}
-
-std::pair<vector_size_t, vector_size_t> Window::findFrameEndPoints(
-    vector_size_t /*functionNumber*/,
-    vector_size_t partitionStartRow,
-    vector_size_t /*partitionEndRow*/,
-    vector_size_t currentRow) {
-  // TODO : We handle only the default window frame in this code. Add support
-  // for all window frames subsequently.
-
-  // Default window frame is Range UNBOUNDED PRECEDING CURRENT ROW.
-  return std::make_pair(partitionStartRow, currentRow);
 }
 
 void Window::callResetPartition(vector_size_t partitionNumber) {
@@ -229,9 +311,22 @@ void Window::callApplyForPartitionRows(
     rawPeerEndBuffer[j] = peerEndRow_ - 1;
 
     for (auto w = 0; w < numFuncs; w++) {
-      auto frameEndPoints = findFrameEndPoints(w, 0, numPartitionRows_, i);
-      rawFrameStartBuffers[w][j] = frameEndPoints.first;
-      rawFrameEndBuffers[w][j] = frameEndPoints.second;
+      rawFrameStartBuffers[w][j] =
+          windowFunctions_[w]->getFrameStartBoundFunction()(
+              windowFrames_[w].type,
+              w,
+              0,
+              numPartitionRows_,
+              i,
+              windowFrames_[w].startChannel);
+      rawFrameEndBuffers[w][j] =
+          windowFunctions_[w]->getFrameEndBoundFunction()(
+              windowFrames_[w].type,
+              w,
+              0,
+              numPartitionRows_,
+              i,
+              windowFrames_[w].endChannel);
     }
   }
 

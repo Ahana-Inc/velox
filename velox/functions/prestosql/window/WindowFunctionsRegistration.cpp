@@ -17,13 +17,21 @@
 
 namespace facebook::velox::window {
 
-extern void registerRowNumber(const std::string& name);
+extern void registerCumeDist(const std::string& name);
+extern void registerDenseRank(const std::string& name);
+extern void registerNtile(const std::string& name);
+extern void registerPercentRank(const std::string& name);
 extern void registerRank(const std::string& name);
+extern void registerRowNumber(const std::string& name);
 extern void registerNthValue(const std::string& name);
 
 void registerWindowFunctions() {
-  window::registerRowNumber("row_number");
+  window::registerCumeDist("cume_dist");
+  window::registerDenseRank("dense_rank");
+  window::registerNtile("ntile");
+  window::registerPercentRank("percent_rank");
   window::registerRank("rank");
+  window::registerRowNumber("row_number");
   window::registerNthValue("nth_value");
 }
 

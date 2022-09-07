@@ -11,8 +11,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-add_executable(velox_windows_test NthValueTest.cpp RankTest.cpp
-                                  RowNumberTest.cpp Main.cpp)
+add_executable(
+  velox_windows_test
+  CumeDistTest.cpp
+  DenseRankTest.cpp
+  NtileTest.cpp
+  PercentRankTest.cpp
+  RankTest.cpp
+  RowNumberTest.cpp
+  NthValueTest.cpp
+  Main.cpp)
 
 add_test(
   NAME velox_windows_test

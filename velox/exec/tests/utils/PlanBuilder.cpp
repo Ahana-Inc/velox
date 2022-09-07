@@ -1211,6 +1211,26 @@ parseOrderByKeys(
   return {sortingKeys, sortingOrders};
 }
 
+std::pair<core::FieldAccessTypedExprPtr, core::FieldAccessTypedExprPtr>
+parseFrameBoundaries(
+    const duckdb::IExprWindowFunction& windowExpr,
+    const std::string& windowString,
+    const TypePtr& inputRow,
+    memory::MemoryPool* pool) {
+  // TO-DO: Check how to add constexpr changes here
+  // TO-DO: Check if constexpr for frame boundaries is permitted
+  auto frameStartExpr = core::Expressions::inferTypes(
+      windowExpr.frame.startValue, inputRow, pool);
+  auto frameStartKey =
+      std::dynamic_pointer_cast<const core::FieldAccessTypedExpr>(
+          frameStartExpr);
+  auto frameEndExpr =
+      core::Expressions::inferTypes(windowExpr.frame.endValue, inputRow, pool);
+  auto frameEndKey =
+      std::dynamic_pointer_cast<const core::FieldAccessTypedExpr>(frameEndExpr);
+  return {frameStartKey, frameEndKey};
+}
+
 bool equalFieldAccessTypedExprPtrList(
     const std::vector<core::FieldAccessTypedExprPtr>& lhs,
     const std::vector<core::FieldAccessTypedExprPtr>& rhs) {

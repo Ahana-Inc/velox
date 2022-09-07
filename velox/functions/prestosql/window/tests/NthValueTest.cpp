@@ -100,5 +100,162 @@ TEST_F(NthValueTest, basicNthValue2) {
       op,
       "SELECT c0, c1, 1 as c2, nth_value(c0, 1) over (partition by c0 order by c1) as nth_value_partition FROM tmp order by c0, c1");
 }
+
+TEST_F(NthValueTest, unboundedPrecedingFrame) {
+  auto vectors = makeRowVector({
+      makeFlatVector<int32_t>({1, 1, 1, 2, 2, 2, 3, 3, 3, 3}),
+      makeFlatVector<int32_t>({3, 2, 5, 6, 9, 4, 1, 8, 7, 11}),
+  });
+  createDuckDbTable({vectors});
+
+  auto op1 =
+      PlanBuilder()
+          .values({vectors})
+          .project({"c0 as c0", "c1 as c1", "1 as c2"})
+          .window(
+              {"nth_value(c0, c2) over (partition by c0 order by c1 range between unbounded preceding and current row) as nth_value_partition"})
+          .orderBy({"c0 asc nulls last", "c1 asc nulls last"}, false)
+          .planNode();
+  assertQuery(
+      op1,
+      "SELECT c0, c1, 1 as c2, nth_value(c0, 1) over (partition by c0 order by c1 range between unbounded preceding and current row) as nth_value_partition FROM tmp order by c0, c1");
+
+  auto op2 =
+      PlanBuilder()
+          .values({vectors})
+          .project({"c0 as c0", "c1 as c1", "3 as c2"})
+          .window(
+              {"nth_value(c0, c2) over (partition by c0 order by c1 range between unbounded preceding and current row) as nth_value_partition"})
+          .orderBy({"c0 asc nulls last", "c1 asc nulls last"}, false)
+          .planNode();
+  assertQuery(
+      op2,
+      "SELECT c0, c1, 3 as c2, nth_value(c0, 3) over (partition by c0 order by c1 range between unbounded preceding and current row) as nth_value_partition FROM tmp order by c0, c1");
+
+  //  auto op3 =
+  //      PlanBuilder()
+  //          .values({vectors})
+  //          .project({"c0 as c0", "c1 as c1", "5 as c2"})
+  //          .window(
+  //              {"nth_value(c0, c2) over (partition by c0 order by c1 range
+  //              between unbounded preceding and current row) as
+  //              nth_value_partition"})
+  //          .orderBy({"c0 asc nulls last", "c1 asc nulls last"}, false)
+  //          .planNode();
+  //  assertQuery(
+  //      op3,
+  //      "SELECT c0, c1, 5 as c2, nth_value(c0, 5) over (partition by c0 order
+  //      by c1 range between unbounded preceding and current row) as
+  //      nth_value_partition FROM tmp order by c0, c1");
+}
+
+TEST_F(NthValueTest, unboundedFollowingFrame) {
+  auto vectors = makeRowVector({
+      makeFlatVector<int32_t>({1, 1, 1, 2, 2, 2, 3, 3, 3, 3}),
+      makeFlatVector<int32_t>({3, 2, 5, 6, 9, 4, 1, 8, 7, 11}),
+  });
+  createDuckDbTable({vectors});
+
+  auto op1 =
+      PlanBuilder()
+          .values({vectors})
+          .project({"c0 as c0", "c1 as c1", "1 as c2"})
+          .window(
+              {"nth_value(c0, c2) over (partition by c0 order by c1 range between current row and unbounded following) as nth_value_partition"})
+          .orderBy({"c0 asc nulls last", "c1 asc nulls last"}, false)
+          .planNode();
+  assertQuery(
+      op1,
+      "SELECT c0, c1, 1 as c2, nth_value(c0, 1) over (partition by c0 order by c1 range between current row and unbounded following) as nth_value_partition FROM tmp order by c0, c1");
+
+  auto op2 =
+      PlanBuilder()
+          .values({vectors})
+          .project({"c0 as c0", "c1 as c1", "3 as c2"})
+          .window(
+              {"nth_value(c0, c2) over (partition by c0 order by c1 range between current row and unbounded following) as nth_value_partition"})
+          .orderBy({"c0 asc nulls last", "c1 asc nulls last"}, false)
+          .planNode();
+  assertQuery(
+      op2,
+      "SELECT c0, c1, 3 as c2, nth_value(c0, 3) over (partition by c0 order by c1 range between current row and unbounded following) as nth_value_partition FROM tmp order by c0, c1");
+
+  auto op3 =
+      PlanBuilder()
+          .values({vectors})
+          .project({"c0 as c0", "c1 as c1", "5 as c2"})
+          .window(
+              {"nth_value(c0, c2) over (partition by c0 order by c1 range between current row and unbounded following) as nth_value_partition"})
+          .orderBy({"c0 asc nulls last", "c1 asc nulls last"}, false)
+          .planNode();
+  assertQuery(
+      op3,
+      "SELECT c0, c1, 5 as c2, nth_value(c0, 5) over (partition by c0 order by c1 range between current row and unbounded following) as nth_value_partition FROM tmp order by c0, c1");
+}
+
+TEST_F(NthValueTest, kBoundedPrecedingFrame) {
+  auto vectors = makeRowVector({
+      makeFlatVector<int32_t>({1, 1, 1, 2, 2, 2, 3, 3, 3, 3}),
+      makeFlatVector<int32_t>({3, 2, 5, 6, 9, 4, 1, 8, 7, 11}),
+  });
+  createDuckDbTable({vectors});
+
+  auto op1 =
+      PlanBuilder()
+          .values({vectors})
+          .project({"c0 as c0", "c1 as c1", "2 as c2"})
+          .window(
+              {"nth_value(c0, c2) over (partition by c0 order by c1 rows between c2 preceding and current row) as nth_value_partition"})
+          .orderBy({"c0 asc nulls last", "c1 asc nulls last"}, false)
+          .planNode();
+  assertQuery(
+      op1,
+      "SELECT c0, c1, 2 as c2, nth_value(c0, 2) over (partition by c0 order by c1 rows between c2 preceding and current row) as nth_value_partition FROM tmp order by c0, c1");
+
+  auto op2 =
+      PlanBuilder()
+          .values({vectors})
+          .project({"c0 as c0", "c1 as c1", "3 as c2"})
+          .window(
+              {"nth_value(c0, c2) over (partition by c0 order by c1 rows between c2 preceding and current row) as nth_value_partition"})
+          .orderBy({"c0 asc nulls last", "c1 asc nulls last"}, false)
+          .planNode();
+  assertQuery(
+      op2,
+      "SELECT c0, c1, 3 as c2, nth_value(c0, 3) over (partition by c0 order by c1 rows between c2 preceding and current row) as nth_value_partition FROM tmp order by c0, c1");
+}
+
+TEST_F(NthValueTest, kBoundedFollowingFrame) {
+  auto vectors = makeRowVector({
+      makeFlatVector<int32_t>({1, 1, 1, 2, 2, 2, 3, 3, 3, 3}),
+      makeFlatVector<int32_t>({3, 2, 5, 6, 9, 4, 1, 8, 7, 11}),
+  });
+  createDuckDbTable({vectors});
+
+  auto op1 =
+      PlanBuilder()
+          .values({vectors})
+          .project({"c0 as c0", "c1 as c1", "2 as c2"})
+          .window(
+              {"nth_value(c0, c2) over (partition by c0 order by c1 rows between current row and c2 following) as nth_value_partition"})
+          .orderBy({"c0 asc nulls last", "c1 asc nulls last"}, false)
+          .planNode();
+  assertQuery(
+      op1,
+      "SELECT c0, c1, 2 as c2, nth_value(c0, 2) over (partition by c0 order by c1 rows between current row and c2 following) as nth_value_partition FROM tmp order by c0, c1");
+
+  auto op2 =
+      PlanBuilder()
+          .values({vectors})
+          .project({"c0 as c0", "c1 as c1", "3 as c2"})
+          .window(
+              {"nth_value(c0, c2) over (partition by c0 order by c1 rows between current row and c2 following) as nth_value_partition"})
+          .orderBy({"c0 asc nulls last", "c1 asc nulls last"}, false)
+          .planNode();
+  assertQuery(
+      op2,
+      "SELECT c0, c1, 3 as c2, nth_value(c0, 3) over (partition by c0 order by c1 rows between current row and c2 following) as nth_value_partition FROM tmp order by c0, c1");
+}
+
 }; // namespace
 }; // namespace facebook::velox::window::test
