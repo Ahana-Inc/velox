@@ -46,11 +46,12 @@ class NthValueFunction : public exec::WindowFunction {
       const BufferPtr& /*peerGroupStarts*/,
       const BufferPtr& /*peerGroupEnds*/,
       const BufferPtr& frameStarts,
-      const BufferPtr& /*frameEnds*/,
+      const BufferPtr& frameEnds,
       int32_t resultOffset,
       const VectorPtr& result) {
     auto numRows = frameStarts->size() / sizeof(vector_size_t);
     auto frameStartsVector = frameStarts->as<vector_size_t>();
+    auto frameEndsVector = frameEnds->as<vector_size_t>();
 
     offsetsBuffer_->setSize(numRows * sizeof(vector_size_t));
     inputOffsetsVector_->setSize(numRows);
@@ -60,7 +61,13 @@ class NthValueFunction : public exec::WindowFunction {
     for (int i = 0; i < numRows; i++) {
       auto inputOffset = inputOffsetsFlatVector_->valueAt(partitionOffset_ + i);
       auto frameStart = frameStartsVector[partitionOffset_ + i];
-      rawOffsetsBuffer_[i] = frameStart + inputOffset - 1;
+      auto frameEnd = frameEndsVector[partitionOffset_ + i];
+
+      if (frameStart + inputOffset - 1 <= frameEnd) {
+        rawOffsetsBuffer_[i] = frameStart + inputOffset - 1;
+      } else {
+        rawOffsetsBuffer_[i] = -1;
+      }
     }
 
     partition_->extractColumn(

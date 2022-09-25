@@ -114,7 +114,7 @@ inline bool WindowRowStore::compareRowsWithKeys(
 }
 
 bool WindowRowStore::peerCompare(vector_size_t lhs, vector_size_t rhs) {
-  VELOX_DCHECK_LT(partitionNumber, partitionStartRows_.size());
+  //  VELOX_DCHECK_LT(partitionNumber, partitionStartRows_.size());
   auto partitionStartRow = partitionStartRows_[currentPartition_];
   return compareRowsWithKeys(
       sortedRows_[partitionStartRow + lhs],

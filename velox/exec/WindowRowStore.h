@@ -40,6 +40,10 @@ class WindowRowStore {
     return windowPartition_.get();
   }
 
+  vector_size_t getCurrentPartition() {
+    return currentPartition_;
+  }
+
   void addInput(RowVectorPtr input);
 
   void noMoreInput();

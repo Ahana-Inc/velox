@@ -1497,9 +1497,11 @@ class WindowNode : public PlanNode {
   struct Frame {
     WindowType type;
     BoundType startType;
-    TypedExprPtr startValue;
+    std::optional<bool> isStartBoundConstant;
+    std::optional<vector_size_t> startValue;
     BoundType endType;
-    TypedExprPtr endValue;
+    std::optional<bool> isEndBoundConstant;
+    std::optional<vector_size_t> endValue;
   };
 
   struct Function {

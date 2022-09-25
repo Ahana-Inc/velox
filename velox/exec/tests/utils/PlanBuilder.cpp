@@ -1134,6 +1134,16 @@ const core::WindowNode::Frame createWindowFrame(
     const duckdb::IExprWindowFrame& windowFrame,
     const TypePtr& inputRow,
     memory::MemoryPool* pool) {
+  auto fieldArgToChannel =
+      [&](const core::TypedExprPtr arg) -> std::optional<column_index_t> {
+    if (arg) {
+      std::optional<column_index_t> argChannel =
+          exprToChannel(arg.get(), inputRow);
+      return argChannel;
+    }
+    return std::nullopt;
+  };
+
   core::WindowNode::Frame frame;
   frame.type = (windowFrame.type == duckdb::WindowType::kRows)
       ? core::WindowNode::WindowType::kRows
@@ -1155,14 +1165,55 @@ const core::WindowNode::Frame createWindowFrame(
     }
     VELOX_UNREACHABLE();
   };
+
   frame.startType = boundTypeConversion(windowFrame.startType);
-  frame.startValue = windowFrame.startValue
-      ? core::Expressions::inferTypes(windowFrame.startValue, inputRow, pool)
-      : nullptr;
+  if (windowFrame.startValue) {
+    auto frameStartExpr =
+        core::Expressions::inferTypes(windowFrame.startValue, inputRow, pool);
+    auto frameStartKey =
+        std::dynamic_pointer_cast<const core::ConstantTypedExpr>(
+            frameStartExpr);
+    if (!frameStartKey) {
+      frame.isStartBoundConstant = false;
+      auto frameStart =
+          core::Expressions::inferTypes(windowFrame.startValue, inputRow, pool);
+      frame.startValue = fieldArgToChannel(frameStart);
+    } else {
+      frame.isStartBoundConstant = true;
+      VELOX_CHECK(
+          frameStartKey->value() != TypeKind::BIGINT,
+          "k should be a constant in kPreceding frame bound");
+      auto frameStartOffsetString = frameStartKey->toString();
+      std::stringstream stream(frameStartOffsetString);
+      vector_size_t frameStartOffset;
+      stream >> frameStartOffset;
+      frame.startValue = frameStartOffset;
+    }
+  }
+
   frame.endType = boundTypeConversion(windowFrame.endType);
-  frame.endValue = windowFrame.endValue
-      ? core::Expressions::inferTypes(windowFrame.endValue, inputRow, pool)
-      : nullptr;
+  if (windowFrame.endValue) {
+    auto frameEndExpr =
+        core::Expressions::inferTypes(windowFrame.endValue, inputRow, pool);
+    auto frameEndKey =
+        std::dynamic_pointer_cast<const core::ConstantTypedExpr>(frameEndExpr);
+    if (!frameEndKey) {
+      frame.isEndBoundConstant = false;
+      auto frameEnd =
+          core::Expressions::inferTypes(windowFrame.endValue, inputRow, pool);
+      frame.endValue = fieldArgToChannel(frameEnd);
+    } else {
+      frame.isEndBoundConstant = true;
+      VELOX_CHECK(
+          frameEndKey->value() != TypeKind::BIGINT,
+          "k should be a constant in kFollowing frame bound");
+      auto frameEndOffsetString = frameEndKey->toString();
+      std::stringstream stream(frameEndOffsetString);
+      vector_size_t frameEndOffset;
+      stream >> frameEndOffset;
+      frame.endValue = frameEndOffset;
+    }
+  }
   return frame;
 }
 

@@ -648,10 +648,10 @@ class RowContainer {
 
     for (int32_t i = 0; i < numRows; ++i) {
       auto resultIndex = resultOffset + i;
-      auto row = rows[rowNumbersVector[i]];
-      if (row == nullptr) {
+      if (rowNumbersVector[i] < 0 || !rows[rowNumbersVector[i]]) {
         bits::setNull(nulls, resultIndex, true);
       } else {
+        auto row = rows[rowNumbersVector[i]];
         bits::setNull(nulls, resultIndex, isNullAt(row, nullByte, nullMask));
         values[resultIndex] = valueAt<T>(row, columnOffset);
       }
@@ -692,15 +692,15 @@ class RowContainer {
     auto values = valuesBuffer->asMutableRange<T>();
     for (int32_t i = 0; i < numRows; ++i) {
       auto resultIndex = resultOffset + i;
-      auto row = rows[rowNumbersVector[i]];
-      if (row == nullptr) {
+      if (rowNumbersVector[i] < 0 || !rows[rowNumbersVector[i]]) {
         result->setNull(resultIndex, true);
       } else {
         result->setNull(resultIndex, false);
         // Here StringView would reference the hash-table, not copy.
         // Hence, there is a separate specialization written for StringView
         // for this function.
-        values[resultIndex] = valueAt<T>(row, columnOffset);
+        values[resultIndex] =
+            valueAt<T>(rows[rowNumbersVector[i]], columnOffset);
       }
     }
   }

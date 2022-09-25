@@ -65,8 +65,10 @@ class Window : public Operator {
     const core::WindowNode::WindowType type;
     const core::WindowNode::BoundType startType;
     const core::WindowNode::BoundType endType;
-    const std::optional<column_index_t> startChannel;
-    const std::optional<column_index_t> endChannel;
+    const std::optional<bool> isStartBoundConstant;
+    const std::optional<vector_size_t> startValue;
+    const std::optional<bool> isEndBoundConstant;
+    const std::optional<vector_size_t> endValue;
   };
 
   // Helper function to create WindowFunction and frame objects
@@ -93,6 +95,13 @@ class Window : public Operator {
       const std::vector<VectorPtr>& result,
       vector_size_t resultOffset);
 
+  // Return the vector pointers to
+  std::pair<VectorPtr, VectorPtr> computeVariableFrameBounds(
+      VectorPtr& precedingVector,
+      VectorPtr& followingVector,
+      vector_size_t& startOffset,
+      vector_size_t& endOffset);
+
   // This function is to find the frame end points for the current row
   // being output.
   // @param functionNumber  Index of the window function whose frame we
@@ -108,7 +117,11 @@ class Window : public Operator {
       vector_size_t functionNumber,
       vector_size_t partitionStartRow,
       vector_size_t partitionEndRow,
-      vector_size_t currentRow);
+      vector_size_t currentRow,
+      std::optional<vector_size_t> peerStart,
+      std::optional<vector_size_t> peerEnd,
+      std::optional<vector_size_t> offsetStart,
+      std::optional<vector_size_t> offsetEnd);
 
   // Function to compute window function values for the current output
   // buffer. The buffer has numOutputRows number of rows. windowOutputs

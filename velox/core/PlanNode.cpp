@@ -472,12 +472,12 @@ void addWindowFunction(
   auto frame = windowFunction.frame;
   stream << windowTypeString(frame.type) << " between ";
   if (frame.startValue) {
-    addKeys(stream, {frame.startValue});
+    stream << frame.startValue.value();
     stream << " ";
   }
   stream << frameBoundString(frame.startType) << " and ";
   if (frame.endValue) {
-    addKeys(stream, {frame.endValue});
+    stream << frame.endValue.value();
     stream << " ";
   }
   stream << frameBoundString(frame.endType);

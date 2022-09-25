@@ -21,6 +21,15 @@
 
 namespace facebook::velox::exec {
 
+typedef vector_size_t (*windowFrameFunctionPtr)(
+    core::WindowNode::WindowType,
+    vector_size_t,
+    vector_size_t,
+    vector_size_t,
+    vector_size_t,
+    std::optional<vector_size_t>,
+    std::optional<vector_size_t>);
+
 class WindowFunction {
  public:
   explicit WindowFunction(TypePtr resultType, memory::MemoryPool* pool)
@@ -80,9 +89,45 @@ class WindowFunction {
       const TypePtr& resultType,
       memory::MemoryPool* pool);
 
+  windowFrameFunctionPtr getFrameStartBoundFunction() {
+    return findFrameBoundsStart_;
+  }
+
+  windowFrameFunctionPtr getFrameEndBoundFunction() {
+    return findFrameBoundsEnd_;
+  }
+
+  void setFrameStartBoundFunction(windowFrameFunctionPtr func) {
+    findFrameBoundsStart_ = func;
+  }
+
+  void setFrameEndBoundFunction(windowFrameFunctionPtr func) {
+    findFrameBoundsEnd_ = func;
+  }
+
+  std::optional<bool> getFrameStartType() {
+    return isFrameStartConstant_;
+  }
+
+  std::optional<bool> getFrameEndType() {
+    return isFrameEndConstant_;
+  }
+
+  void setFrameStartType(bool frameStartConstant) {
+    isFrameStartConstant_ = frameStartConstant;
+  }
+
+  void setFrameEndType(bool frameEndConstant) {
+    isFrameEndConstant_ = frameEndConstant;
+  }
+
  protected:
   const TypePtr resultType_;
   memory::MemoryPool* pool_;
+  windowFrameFunctionPtr findFrameBoundsStart_;
+  windowFrameFunctionPtr findFrameBoundsEnd_;
+  std::optional<bool> isFrameStartConstant_;
+  std::optional<bool> isFrameEndConstant_;
 };
 
 /// Information from the Window operator that is useful for the function logic.
