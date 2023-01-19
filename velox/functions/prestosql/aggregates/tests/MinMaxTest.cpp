@@ -236,4 +236,34 @@ TEST_F(MinMaxTest, initialValue) {
   testAggregations({row}, {}, {"max(c1)"}, "SELECT -1");
 }
 
+TEST_F(MinMaxTest, decimalMinMax) {
+  /// TODO: Add vectorfuzzer support for decimals to use existing
+  /// MinMaxTest::doTest() call.
+  auto longDecimal = makeNullableLongDecimalFlatVector(
+      {buildInt128(10, 300),
+       buildInt128(-10, 300),
+       buildInt128(200, 300),
+       std::nullopt},
+      DECIMAL(23, 4));
+  testAggregations(
+      {makeRowVector({longDecimal})},
+      {},
+      {"max(c0)", "min(c0)"},
+      {},
+      {makeRowVector(
+          {makeLongDecimalFlatVector({buildInt128(200, 300)}, DECIMAL(23, 4)),
+           makeLongDecimalFlatVector(
+               {buildInt128(-10, 300)}, DECIMAL(23, 4))})});
+
+  auto shortDecimal = makeNullableShortDecimalFlatVector(
+      {10000, 20000, -20000, -10000, std::nullopt, -50000}, DECIMAL(5, 4));
+  testAggregations(
+      {makeRowVector({shortDecimal})},
+      {},
+      {"max(c0)", "min(c0)"},
+      {},
+      {makeRowVector(
+          {makeShortDecimalFlatVector({20000}, DECIMAL(5, 4)),
+           makeShortDecimalFlatVector({-50000}, DECIMAL(5, 4))})});
+}
 } // namespace
