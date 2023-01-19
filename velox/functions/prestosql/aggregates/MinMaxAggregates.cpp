@@ -94,6 +94,9 @@ class MinMaxAggregate : public SimpleNumericAggregate<T, T, T> {
   }
 };
 
+/// Override 'accumulatorAlignmentSize' for UnscaledLongDecimal values as it
+/// uses int128_t type. Some CPUs don't support misaligned access to int128_t
+/// type.
 template <>
 inline int32_t MinMaxAggregate<UnscaledLongDecimal>::accumulatorAlignmentSize()
     const {
@@ -187,11 +190,11 @@ class MaxAggregate : public MinMaxAggregate<T> {
   }
 
  private:
-  static T kInitialValue_;
+  static const T kInitialValue_;
 };
 
 template <typename T>
-T MaxAggregate<T>::kInitialValue_ = MinMaxTrait<T>::min();
+const T MaxAggregate<T>::kInitialValue_ = MinMaxTrait<T>::min();
 
 template <typename T>
 class MinAggregate : public MinMaxAggregate<T> {
@@ -263,11 +266,11 @@ class MinAggregate : public MinMaxAggregate<T> {
   }
 
  private:
-  static T kInitialValue_;
+  static const T kInitialValue_;
 };
 
 template <typename T>
-T MinAggregate<T>::kInitialValue_ = MinMaxTrait<T>::max();
+const T MinAggregate<T>::kInitialValue_ = MinMaxTrait<T>::max();
 
 class NonNumericMinMaxAggregateBase : public exec::Aggregate {
  public:
