@@ -136,31 +136,35 @@ void SelectiveIntegerColumnReader::processFilter(
       }
       break;
     case velox::common::FilterKind::kBigintRange:
-      readHelper<Reader, velox::common::BigintRange, isDense>(
+      readHelper<Reader, velox::common::BigintRange<int64_t>, isDense>(
           filter, rows, extractValues);
       break;
     case velox::common::FilterKind::kNegatedBigintRange:
-      readHelper<Reader, velox::common::NegatedBigintRange, isDense>(
+      readHelper<Reader, velox::common::NegatedBigintRange<int64_t>, isDense>(
           filter, rows, extractValues);
       break;
     case velox::common::FilterKind::kBigintValuesUsingHashTable:
-      readHelper<Reader, velox::common::BigintValuesUsingHashTable, isDense>(
-          filter, rows, extractValues);
+      readHelper<
+          Reader,
+          velox::common::BigintValuesUsingHashTable<int64_t>,
+          isDense>(filter, rows, extractValues);
       break;
     case velox::common::FilterKind::kBigintValuesUsingBitmask:
-      readHelper<Reader, velox::common::BigintValuesUsingBitmask, isDense>(
-          filter, rows, extractValues);
+      readHelper<
+          Reader,
+          velox::common::BigintValuesUsingBitmask<int64_t>,
+          isDense>(filter, rows, extractValues);
       break;
     case velox::common::FilterKind::kNegatedBigintValuesUsingHashTable:
       readHelper<
           Reader,
-          velox::common::NegatedBigintValuesUsingHashTable,
+          velox::common::NegatedBigintValuesUsingHashTable<int64_t>,
           isDense>(filter, rows, extractValues);
       break;
     case velox::common::FilterKind::kNegatedBigintValuesUsingBitmask:
       readHelper<
           Reader,
-          velox::common::NegatedBigintValuesUsingBitmask,
+          velox::common::NegatedBigintValuesUsingBitmask<int64_t>,
           isDense>(filter, rows, extractValues);
       break;
     default:

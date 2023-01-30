@@ -263,7 +263,7 @@ class ColumnStats : public AbstractColumnStats {
       if (filterSpec.allowNulls_) {
         return std::make_unique<velox::common::IsNull>();
       } else {
-        return std::make_unique<velox::common::BigintRange>(0, 0, false);
+        return std::make_unique<velox::common::BigintRange<T>>(0, 0, false);
       }
     }
     int32_t lowerIndex;
@@ -272,7 +272,7 @@ class ColumnStats : public AbstractColumnStats {
     T upper =
         valueAtPct(filterSpec.startPct + filterSpec.selectPct, &upperIndex);
     if (!filterSpec.allowNulls_) {
-      return std::make_unique<velox::common::BigintRange>(
+      return std::make_unique<velox::common::BigintRange<T>>(
           getIntegerValue(lower), getIntegerValue(upper), false);
     }
     if (upperIndex - lowerIndex < 1000 && ++counter_ % 10 <= 3) {
@@ -282,18 +282,18 @@ class ColumnStats : public AbstractColumnStats {
       }
       // make sure we don't accidentally generate an AlwaysFalse filter
       if (counter_ % 2 == 1 && filterSpec.selectPct < 100.0) {
-        return velox::common::createNegatedBigintValues(in, true);
+        return velox::common::createNegatedBigintValues<int64_t>(in, true);
       }
-      return velox::common::createBigintValues(in, true);
+      return velox::common::createBigintValues<int64_t>(in, true);
     }
     // sometimes make a negated filter instead (1/4 chance)
     if (counter_ % 4 == 1 && filterSpec.selectPct < 100.0) {
-      return std::make_unique<velox::common::NegatedBigintRange>(
+      return std::make_unique<velox::common::NegatedBigintRange<int64_t>>(
           getIntegerValue(lower),
           getIntegerValue(upper),
           filterSpec.selectPct < 75);
     }
-    return std::make_unique<velox::common::BigintRange>(
+    return std::make_unique<velox::common::BigintRange<int64_t>>(
         getIntegerValue(lower),
         getIntegerValue(upper),
         filterSpec.selectPct > 25);
@@ -325,7 +325,7 @@ class ColumnStats : public AbstractColumnStats {
         }
       }
     }
-    return std::make_unique<velox::common::BigintRange>(
+    return std::make_unique<velox::common::BigintRange<int64_t>>(
         getIntegerValue(max), getIntegerValue(max), false);
   }
 

@@ -28,6 +28,7 @@
 #include "velox/common/base/Exceptions.h"
 #include "velox/common/base/SimdUtil.h"
 #include "velox/type/StringView.h"
+#include "velox/type/UnscaledLongDecimal.h"
 #include "velox/type/UnscaledShortDecimal.h"
 
 namespace facebook::velox::common {
@@ -131,7 +132,11 @@ class Filter {
     VELOX_UNSUPPORTED("{}: testInt64() is not supported.", toString());
   }
 
-  virtual bool testInt128(__int128_t /* unused */) const {
+  virtual bool testInt64(int128_t /* unused */) const {
+    VELOX_UNSUPPORTED("{}: testInt64() is not supported.", toString());
+  }
+
+  virtual bool testInt128(int128_t /* unused */) const {
     VELOX_UNSUPPORTED("{}: testInt128() is not supported.", toString());
   }
 
@@ -148,11 +153,13 @@ class Filter {
   }
 
   virtual xsimd::batch_bool<int32_t> testValues(xsimd::batch<int32_t> x) const {
-    return genericTestValues(x, [this](int32_t x) { return testInt64(x); });
+    return genericTestValues(
+        x, [this](int32_t x) { return testInt64(static_cast<int64_t>(x)); });
   }
 
   virtual xsimd::batch_bool<int16_t> testValues(xsimd::batch<int16_t> x) const {
-    return genericTestValues(x, [this](int16_t x) { return testInt64(x); });
+    return genericTestValues(
+        x, [this](int16_t x) { return testInt64(static_cast<int64_t>(x)); });
   }
 
   virtual xsimd::batch_bool<double> testValues(xsimd::batch<double> x) const {
@@ -202,6 +209,11 @@ class Filter {
   // plus null if hasNull is true.
   virtual bool
   testInt64Range(int64_t /*min*/, int64_t /*max*/, bool /*hasNull*/) const {
+    VELOX_UNSUPPORTED("{}: testInt64Range() is not supported.", toString());
+  }
+
+  virtual bool
+  testInt64Range(int128_t /*min*/, int128_t /*max*/, bool /*hasNull*/) const {
     VELOX_UNSUPPORTED("{}: testInt64Range() is not supported.", toString());
   }
 
@@ -539,19 +551,20 @@ class BoolValue final : public Filter {
 /// ranges, e.g. c >= 10, c <= 34, c BETWEEN 10 and 34. Open ranges can be
 /// implemented by using the value to the left or right of the end of the range,
 /// e.g. a < 10 is equivalent to a <= 9.
+template <typename T>
 class BigintRange final : public Filter {
  public:
   /// @param lower Lower end of the range, inclusive.
   /// @param upper Upper end of the range, inclusive.
   /// @param nullAllowed Null values are passing the filter if true.
-  BigintRange(int64_t lower, int64_t upper, bool nullAllowed)
+  BigintRange(T lower, T upper, bool nullAllowed)
       : Filter(true, nullAllowed, FilterKind::kBigintRange),
         lower_(lower),
         upper_(upper),
-        lower32_(std::max<int64_t>(lower, std::numeric_limits<int32_t>::min())),
-        upper32_(std::min<int64_t>(upper, std::numeric_limits<int32_t>::max())),
-        lower16_(std::max<int64_t>(lower, std::numeric_limits<int16_t>::min())),
-        upper16_(std::min<int64_t>(upper, std::numeric_limits<int16_t>::max())),
+        lower32_(std::max<T>(lower, std::numeric_limits<int32_t>::min())),
+        upper32_(std::min<T>(upper, std::numeric_limits<int32_t>::max())),
+        lower16_(std::max<T>(lower, std::numeric_limits<int16_t>::min())),
+        upper16_(std::min<T>(upper, std::numeric_limits<int16_t>::max())),
         isSingleValue_(upper_ == lower_) {}
 
   std::unique_ptr<Filter> clone(
@@ -564,7 +577,7 @@ class BigintRange final : public Filter {
     }
   }
 
-  bool testInt64(int64_t value) const final {
+  bool testInt64(T value) const {
     return value >= lower_ && value <= upper_;
   }
 
@@ -601,7 +614,7 @@ class BigintRange final : public Filter {
         (values <= xsimd::broadcast<int16_t>(upper16_));
   }
 
-  bool testInt64Range(int64_t min, int64_t max, bool hasNull) const final {
+  bool testInt64Range(T min, T max, bool hasNull) const {
     if (hasNull && nullAllowed_) {
       return true;
     }
@@ -609,11 +622,11 @@ class BigintRange final : public Filter {
     return !(min > upper_ || max < lower_);
   }
 
-  int64_t lower() const {
+  T lower() const {
     return lower_;
   }
 
-  int64_t upper() const {
+  T upper() const {
     return upper_;
   }
 
@@ -632,8 +645,8 @@ class BigintRange final : public Filter {
   }
 
  private:
-  const int64_t lower_;
-  const int64_t upper_;
+  const T lower_;
+  const T upper_;
   const int32_t lower32_;
   const int32_t upper32_;
   const int16_t lower16_;
@@ -641,15 +654,16 @@ class BigintRange final : public Filter {
   const bool isSingleValue_;
 };
 
+template <typename T>
 class NegatedBigintRange final : public Filter {
  public:
   /// @param lower Lowest value in the rejected range, inclusive.
   /// @param upper Highest value in the range, inclusive.
   /// @param nullAllowed Null values are passing the filter if true.
-  NegatedBigintRange(int64_t lower, int64_t upper, bool nullAllowed)
+  NegatedBigintRange(T lower, T upper, bool nullAllowed)
       : Filter(true, nullAllowed, FilterKind::kNegatedBigintRange),
-        nonNegated_(std::make_unique<BigintRange>(lower, upper, !nullAllowed)) {
-  }
+        nonNegated_(
+            std::make_unique<BigintRange<T>>(lower, upper, !nullAllowed)) {}
 
   std::unique_ptr<Filter> clone(
       std::optional<bool> nullAllowed = std::nullopt) const final {
@@ -659,7 +673,7 @@ class NegatedBigintRange final : public Filter {
         nullAllowed.value_or(nullAllowed_));
   }
 
-  bool testInt64(int64_t value) const final {
+  bool testInt64(T value) const {
     return !nonNegated_->testInt64(value);
   }
 
@@ -678,7 +692,7 @@ class NegatedBigintRange final : public Filter {
     return ~nonNegated_->testValues(values);
   }
 
-  bool testInt64Range(int64_t min, int64_t max, bool hasNull) const final {
+  bool testInt64Range(T min, T max, bool hasNull) const {
     if (hasNull && nullAllowed_) {
       return true;
     }
@@ -686,11 +700,11 @@ class NegatedBigintRange final : public Filter {
     return !(nonNegated_->lower() <= min && max <= nonNegated_->upper());
   }
 
-  int64_t lower() const {
+  T lower() const {
     return nonNegated_->lower();
   }
 
-  int64_t upper() const {
+  T upper() const {
     return nonNegated_->upper();
   }
 
@@ -701,11 +715,12 @@ class NegatedBigintRange final : public Filter {
   }
 
  private:
-  std::unique_ptr<BigintRange> nonNegated_;
+  std::unique_ptr<BigintRange<T>> nonNegated_;
 };
 
 /// IN-list filter for integral data types. Implemented as a hash table. Good
 /// for large number of values that do not fit within a small range.
+template <typename T>
 class BigintValuesUsingHashTable final : public Filter {
  public:
   /// @param min Minimum value.
@@ -714,9 +729,9 @@ class BigintValuesUsingHashTable final : public Filter {
   /// at least two entries.
   /// @param nullAllowed Null values are passing the filter if true.
   BigintValuesUsingHashTable(
-      int64_t min,
-      int64_t max,
-      const std::vector<int64_t>& values,
+      T min,
+      T max,
+      const std::vector<T>& values,
       bool nullAllowed);
 
   BigintValuesUsingHashTable(
@@ -733,32 +748,32 @@ class BigintValuesUsingHashTable final : public Filter {
   std::unique_ptr<Filter> clone(
       std::optional<bool> nullAllowed = std::nullopt) const final {
     if (nullAllowed) {
-      return std::make_unique<BigintValuesUsingHashTable>(
+      return std::make_unique<BigintValuesUsingHashTable<T>>(
           *this, nullAllowed.value());
     } else {
-      return std::make_unique<BigintValuesUsingHashTable>(*this);
+      return std::make_unique<BigintValuesUsingHashTable<T>>(*this);
     }
   }
 
-  bool testInt64(int64_t value) const final;
+  bool testInt64(T value) const;
   xsimd::batch_bool<int64_t> testValues(xsimd::batch<int64_t>) const final;
   xsimd::batch_bool<int32_t> testValues(xsimd::batch<int32_t>) const final;
   xsimd::batch_bool<int16_t> testValues(xsimd::batch<int16_t> x) const final {
     return Filter::testValues(x);
   }
-  bool testInt64Range(int64_t min, int64_t max, bool hashNull) const final;
+  bool testInt64Range(T min, T max, bool hashNull) const;
 
   std::unique_ptr<Filter> mergeWith(const Filter* other) const final;
 
-  int64_t min() const {
+  T min() const {
     return min_;
   }
 
-  int64_t max() const {
+  T max() const {
     return max_;
   }
 
-  const std::vector<int64_t>& values() const {
+  const std::vector<T>& values() const {
     return values_;
   }
 
@@ -771,23 +786,23 @@ class BigintValuesUsingHashTable final : public Filter {
   }
 
  private:
-  std::unique_ptr<Filter>
-  mergeWith(int64_t min, int64_t max, const Filter* other) const;
+  std::unique_ptr<Filter> mergeWith(T min, T max, const Filter* other) const;
 
   static constexpr int64_t kEmptyMarker = 0xdeadbeefbadefeedL;
   // from Murmur hash
   static constexpr uint64_t M = 0xc6a4a7935bd1e995L;
 
-  const int64_t min_;
-  const int64_t max_;
-  std::vector<int64_t> hashTable_;
+  const T min_;
+  const T max_;
+  std::vector<T> hashTable_;
   bool containsEmptyMarker_ = false;
-  std::vector<int64_t> values_;
+  std::vector<T> values_;
   int32_t sizeMask_;
 };
 
 /// IN-list filter for integral data types. Implemented as a bitmask. Offers
 /// better performance than the hash table when the range of values is small.
+template <typename T>
 class BigintValuesUsingBitmask final : public Filter {
  public:
   /// @param min Minimum value.
@@ -796,9 +811,9 @@ class BigintValuesUsingBitmask final : public Filter {
   /// at least two entries.
   /// @param nullAllowed Null values are passing the filter if true.
   BigintValuesUsingBitmask(
-      int64_t min,
-      int64_t max,
-      const std::vector<int64_t>& values,
+      T min,
+      T max,
+      const std::vector<T>& values,
       bool nullAllowed);
 
   BigintValuesUsingBitmask(
@@ -812,32 +827,32 @@ class BigintValuesUsingBitmask final : public Filter {
   std::unique_ptr<Filter> clone(
       std::optional<bool> nullAllowed = std::nullopt) const final {
     if (nullAllowed) {
-      return std::make_unique<BigintValuesUsingBitmask>(
+      return std::make_unique<BigintValuesUsingBitmask<T>>(
           *this, nullAllowed.value());
     } else {
-      return std::make_unique<BigintValuesUsingBitmask>(*this);
+      return std::make_unique<BigintValuesUsingBitmask<T>>(*this);
     }
   }
 
-  std::vector<int64_t> values() const;
+  std::vector<T> values() const;
 
-  bool testInt64(int64_t value) const final;
+  bool testInt64(T value) const;
 
-  bool testInt64Range(int64_t min, int64_t max, bool hasNull) const final;
+  bool testInt64Range(T min, T max, bool hasNull) const;
 
   std::unique_ptr<Filter> mergeWith(const Filter* other) const final;
 
  private:
-  std::unique_ptr<Filter>
-  mergeWith(int64_t min, int64_t max, const Filter* other) const;
+  std::unique_ptr<Filter> mergeWith(T min, T max, const Filter* other) const;
 
   std::vector<bool> bitmask_;
-  const int64_t min_;
-  const int64_t max_;
+  const T min_;
+  const T max_;
 };
 
 // NOT IN-list filter for integral data types. Implemented as a hash table. Good
 // for large number of rejected values that do not fit within a small range.
+template <typename T>
 class NegatedBigintValuesUsingHashTable final : public Filter {
  public:
   /// @param min Minimum rejected value.
@@ -846,25 +861,25 @@ class NegatedBigintValuesUsingHashTable final : public Filter {
   /// at least two entries.
   /// @param nullAllowed Null values are passing the filter if true.
   NegatedBigintValuesUsingHashTable(
-      int64_t min,
-      int64_t max,
-      const std::vector<int64_t>& values,
+      T min,
+      T max,
+      const std::vector<T>& values,
       bool nullAllowed);
 
   NegatedBigintValuesUsingHashTable(
       const NegatedBigintValuesUsingHashTable& other,
       bool nullAllowed)
       : Filter(true, nullAllowed, other.kind()),
-        nonNegated_(
-            std::make_unique<BigintValuesUsingHashTable>(*other.nonNegated_)) {}
+        nonNegated_(std::make_unique<BigintValuesUsingHashTable<T>>(
+            *other.nonNegated_)) {}
 
   std::unique_ptr<Filter> clone(
       std::optional<bool> nullAllowed = std::nullopt) const final {
-    return std::make_unique<NegatedBigintValuesUsingHashTable>(
+    return std::make_unique<NegatedBigintValuesUsingHashTable<T>>(
         *this, nullAllowed.value_or(nullAllowed_));
   }
 
-  bool testInt64(int64_t value) const final {
+  bool testInt64(T value) const {
     return !nonNegated_->testInt64(value);
   }
 
@@ -880,19 +895,19 @@ class NegatedBigintValuesUsingHashTable final : public Filter {
     return ~nonNegated_->testValues(x);
   }
 
-  bool testInt64Range(int64_t min, int64_t max, bool hashNull) const final;
+  bool testInt64Range(T min, T max, bool hashNull) const;
 
   std::unique_ptr<Filter> mergeWith(const Filter* other) const final;
 
-  int64_t min() const {
+  T min() const {
     return nonNegated_->min();
   }
 
-  int64_t max() const {
+  T max() const {
     return nonNegated_->max();
   }
 
-  const std::vector<int64_t>& values() const {
+  const std::vector<T>& values() const {
     return nonNegated_->values();
   }
 
@@ -905,14 +920,14 @@ class NegatedBigintValuesUsingHashTable final : public Filter {
   }
 
  private:
-  std::unique_ptr<Filter>
-  mergeWith(int64_t min, int64_t max, const Filter* other) const;
+  std::unique_ptr<Filter> mergeWith(T min, T max, const Filter* other) const;
 
-  std::unique_ptr<BigintValuesUsingHashTable> nonNegated_;
+  std::unique_ptr<BigintValuesUsingHashTable<T>> nonNegated_;
 };
 
 /// NOT IN-list filter for integral data types. Implemented as a bitmask. Offers
 /// better performance than the hash table when the range of values is small.
+template <typename T>
 class NegatedBigintValuesUsingBitmask final : public Filter {
  public:
   /// @param min Minimum REJECTED value.
@@ -921,9 +936,9 @@ class NegatedBigintValuesUsingBitmask final : public Filter {
   /// at least two entries.
   /// @param nullAllowed Null values are passing the filter if true.
   NegatedBigintValuesUsingBitmask(
-      int64_t min,
-      int64_t max,
-      const std::vector<int64_t>& values,
+      T min,
+      T max,
+      const std::vector<T>& values,
       bool nullAllowed);
 
   NegatedBigintValuesUsingBitmask(
@@ -933,33 +948,33 @@ class NegatedBigintValuesUsingBitmask final : public Filter {
         min_(other.min_),
         max_(other.max_),
         nonNegated_(
-            std::make_unique<BigintValuesUsingBitmask>(*other.nonNegated_)) {}
+            std::make_unique<BigintValuesUsingBitmask<T>>(*other.nonNegated_)) {
+  }
 
   std::unique_ptr<Filter> clone(
       std::optional<bool> nullAllowed = std::nullopt) const final {
-    return std::make_unique<NegatedBigintValuesUsingBitmask>(
+    return std::make_unique<NegatedBigintValuesUsingBitmask<T>>(
         *this, nullAllowed.value_or(nullAllowed_));
   }
 
-  std::vector<int64_t> values() const {
+  std::vector<T> values() const {
     return nonNegated_->values();
   }
 
-  bool testInt64(int64_t value) const final {
+  bool testInt64(T value) const {
     return !nonNegated_->testInt64(value);
   }
 
-  bool testInt64Range(int64_t min, int64_t max, bool hasNull) const final;
+  bool testInt64Range(T min, T max, bool hasNull) const;
 
   std::unique_ptr<Filter> mergeWith(const Filter* other) const final;
 
  private:
-  std::unique_ptr<Filter>
-  mergeWith(int64_t min, int64_t max, const Filter* other) const;
+  std::unique_ptr<Filter> mergeWith(T min, T max, const Filter* other) const;
 
-  int min_;
-  int max_;
-  std::unique_ptr<BigintValuesUsingBitmask> nonNegated_;
+  T min_;
+  T max_;
+  std::unique_ptr<BigintValuesUsingBitmask<T>> nonNegated_;
 };
 
 /// Base class for range filters on floating point and string data types.
@@ -1533,13 +1548,14 @@ class BytesValues final : public Filter {
 /// Represents a combination of two of more range filters on integral types with
 /// OR semantics. The filter passes if at least one of the contained filters
 /// passes.
+template <typename T>
 class BigintMultiRange final : public Filter {
  public:
   /// @param ranges List of range filters. Must contain at least two entries.
   /// @param nullAllowed Null values are passing the filter if true. nullAllowed
   /// flags in the 'ranges' filters are ignored.
   BigintMultiRange(
-      std::vector<std::unique_ptr<BigintRange>> ranges,
+      std::vector<std::unique_ptr<BigintRange<T>>> ranges,
       bool nullAllowed);
 
   BigintMultiRange(const BigintMultiRange& other, bool nullAllowed);
@@ -1547,13 +1563,13 @@ class BigintMultiRange final : public Filter {
   std::unique_ptr<Filter> clone(
       std::optional<bool> nullAllowed = std::nullopt) const final;
 
-  bool testInt64(int64_t value) const final;
+  bool testInt64(T value) const final;
 
-  bool testInt64Range(int64_t min, int64_t max, bool hasNull) const final;
+  bool testInt64Range(T min, T max, bool hasNull) const final;
 
   std::unique_ptr<Filter> mergeWith(const Filter* other) const final;
 
-  const std::vector<std::unique_ptr<BigintRange>>& ranges() const {
+  const std::vector<std::unique_ptr<BigintRange<T>>>& ranges() const {
     return ranges_;
   }
 
@@ -1568,7 +1584,7 @@ class BigintMultiRange final : public Filter {
   }
 
  private:
-  const std::vector<std::unique_ptr<BigintRange>> ranges_;
+  const std::vector<std::unique_ptr<BigintRange<T>>> ranges_;
   std::vector<int64_t> lowerBounds_;
 };
 
@@ -1682,7 +1698,7 @@ static inline bool applyFilter(TFilter& filter, T value) {
   } else if constexpr (
       std::is_same_v<T, int8_t> || std::is_same_v<T, int16_t> ||
       std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t>) {
-    return filter.testInt64(value);
+    return filter.testInt64(static_cast<int64_t>(value));
   } else if constexpr (std::is_same_v<T, float>) {
     return filter.testFloat(value);
   } else if constexpr (std::is_same_v<T, double>) {
@@ -1705,13 +1721,15 @@ static inline bool applyFilter(TFilter& filter, StringView value) {
 }
 
 // Creates a hash or bitmap based IN filter depending on value distribution.
+template <typename T>
 std::unique_ptr<Filter> createBigintValues(
-    const std::vector<int64_t>& values,
+    const std::vector<T>& values,
     bool nullAllowed);
 
 // Creates a hash or bitmap based NOT IN filter depending on value distribution.
+template <typename T>
 std::unique_ptr<Filter> createNegatedBigintValues(
-    const std::vector<int64_t>& values,
+    const std::vector<T>& values,
     bool nullAllowed);
 
 } // namespace facebook::velox::common

@@ -22,43 +22,44 @@
 
 namespace facebook::velox::exec {
 
-inline std::unique_ptr<common::BigintRange> lessThan(
+inline std::unique_ptr<common::BigintRange<int64_t>> lessThan(
     int64_t max,
     bool nullAllowed = false) {
-  return std::make_unique<common::BigintRange>(
+  return std::make_unique<common::BigintRange<int64_t>>(
       std::numeric_limits<int64_t>::min(), max - 1, nullAllowed);
 }
 
-inline std::unique_ptr<common::BigintRange> lessThanOrEqual(
+inline std::unique_ptr<common::BigintRange<int64_t>> lessThanOrEqual(
     int64_t max,
     bool nullAllowed = false) {
-  return std::make_unique<common::BigintRange>(
+  return std::make_unique<common::BigintRange<int64_t>>(
       std::numeric_limits<int64_t>::min(), max, nullAllowed);
 }
 
-inline std::unique_ptr<common::BigintRange> greaterThan(
+inline std::unique_ptr<common::BigintRange<int64_t>> greaterThan(
     int64_t min,
     bool nullAllowed = false) {
-  return std::make_unique<common::BigintRange>(
+  return std::make_unique<common::BigintRange<int64_t>>(
       min + 1, std::numeric_limits<int64_t>::max(), nullAllowed);
 }
 
-inline std::unique_ptr<common::BigintRange> greaterThanOrEqual(
+inline std::unique_ptr<common::BigintRange<int64_t>> greaterThanOrEqual(
     int64_t min,
     bool nullAllowed = false) {
-  return std::make_unique<common::BigintRange>(
+  return std::make_unique<common::BigintRange<int64_t>>(
       min, std::numeric_limits<int64_t>::max(), nullAllowed);
 }
 
-inline std::unique_ptr<common::NegatedBigintRange> notEqual(
+inline std::unique_ptr<common::NegatedBigintRange<int64_t>> notEqual(
     int64_t val,
     bool nullAllowed = false) {
-  return std::make_unique<common::NegatedBigintRange>(val, val, nullAllowed);
+  return std::make_unique<common::NegatedBigintRange<int64_t>>(
+      val, val, nullAllowed);
 }
 
-inline std::unique_ptr<common::NegatedBigintRange>
+inline std::unique_ptr<common::NegatedBigintRange<int64_t>>
 notBetween(int64_t lower, int64_t upper, bool nullAllowed = false) {
-  return std::make_unique<common::NegatedBigintRange>(
+  return std::make_unique<common::NegatedBigintRange<int64_t>>(
       lower, upper, nullAllowed);
 }
 
@@ -178,32 +179,32 @@ betweenFloat(float min, float max, bool nullAllowed = false) {
       min, false, false, max, false, false, nullAllowed);
 }
 
-inline std::unique_ptr<common::BigintRange>
+inline std::unique_ptr<common::BigintRange<int64_t>>
 between(int64_t min, int64_t max, bool nullAllowed = false) {
-  return std::make_unique<common::BigintRange>(min, max, nullAllowed);
+  return std::make_unique<common::BigintRange<int64_t>>(min, max, nullAllowed);
 }
 
-inline std::unique_ptr<common::BigintMultiRange> bigintOr(
-    std::unique_ptr<common::BigintRange> a,
-    std::unique_ptr<common::BigintRange> b,
+inline std::unique_ptr<common::BigintMultiRange<int64_t>> bigintOr(
+    std::unique_ptr<common::BigintRange<int64_t>> a,
+    std::unique_ptr<common::BigintRange<int64_t>> b,
     bool nullAllowed = false) {
-  std::vector<std::unique_ptr<common::BigintRange>> filters;
+  std::vector<std::unique_ptr<common::BigintRange<int64_t>>> filters;
   filters.emplace_back(std::move(a));
   filters.emplace_back(std::move(b));
-  return std::make_unique<common::BigintMultiRange>(
+  return std::make_unique<common::BigintMultiRange<int64_t>>(
       std::move(filters), nullAllowed);
 }
 
-inline std::unique_ptr<common::BigintMultiRange> bigintOr(
-    std::unique_ptr<common::BigintRange> a,
-    std::unique_ptr<common::BigintRange> b,
-    std::unique_ptr<common::BigintRange> c,
+inline std::unique_ptr<common::BigintMultiRange<int64_t>> bigintOr(
+    std::unique_ptr<common::BigintRange<int64_t>> a,
+    std::unique_ptr<common::BigintRange<int64_t>> b,
+    std::unique_ptr<common::BigintRange<int64_t>> c,
     bool nullAllowed = false) {
-  std::vector<std::unique_ptr<common::BigintRange>> filters;
+  std::vector<std::unique_ptr<common::BigintRange<int64_t>>> filters;
   filters.emplace_back(std::move(a));
   filters.emplace_back(std::move(b));
   filters.emplace_back(std::move(c));
-  return std::make_unique<common::BigintMultiRange>(
+  return std::make_unique<common::BigintMultiRange<int64_t>>(
       std::move(filters), nullAllowed);
 }
 
@@ -214,10 +215,11 @@ inline std::unique_ptr<common::BytesValues> equal(
       std::vector<std::string>{value}, nullAllowed);
 }
 
-inline std::unique_ptr<common::BigintRange> equal(
+inline std::unique_ptr<common::BigintRange<int64_t>> equal(
     int64_t value,
     bool nullAllowed = false) {
-  return std::make_unique<common::BigintRange>(value, value, nullAllowed);
+  return std::make_unique<common::BigintRange<int64_t>>(
+      value, value, nullAllowed);
 }
 
 inline std::unique_ptr<common::BytesRange> between(

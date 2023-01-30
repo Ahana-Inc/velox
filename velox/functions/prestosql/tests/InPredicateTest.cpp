@@ -14,12 +14,18 @@
  * limitations under the License.
  */
 #include "velox/functions/prestosql/tests/utils/FunctionBaseTest.h"
+#include "velox/type/DecimalUtil.h"
 
 using namespace facebook::velox;
 using namespace facebook::velox::test;
 using namespace facebook::velox::functions::test;
 
 class InPredicateTest : public FunctionBaseTest {
+ public:
+  void SetUp() override {
+    this->options_.parseDecimalAsDouble = false;
+  }
+
  protected:
   template <typename T>
   void testIntegers() {
@@ -315,4 +321,26 @@ TEST_F(InPredicateTest, varbinary) {
       "c0 IN (CAST('apple' as VARBINARY), CAST('banana' as VARBINARY))";
   auto result = evaluate<SimpleVector<bool>>(predicate, input);
   assertEqualVectors(makeConstant(true, input->size()), result);
+}
+
+TEST_F(InPredicateTest, shortDecimal) {
+  auto type = DECIMAL(5, 2);
+  auto shortDecimal =
+      makeNullableShortDecimalFlatVector({10000, -10000, 20000, -20000}, type);
+  auto expected = makeFlatVector<bool>({false, true, false, true});
+
+  auto result =
+      evaluate("c0 IN (-100.00, -200.00)", makeRowVector({shortDecimal}));
+  assertEqualVectors(expected, result);
+}
+
+TEST_F(InPredicateTest, longDecimal) {
+  auto type = DECIMAL(20, 3);
+  auto longDecimal = makeNullableLongDecimalFlatVector(
+      {1000000, -1000000, 2000000, -2000000}, type);
+  auto expected = makeFlatVector<bool>({false, true, false, true});
+
+  auto result =
+      evaluate("c0 IN (-1000.000, -2000.000)", makeRowVector({longDecimal}));
+  assertEqualVectors(expected, result);
 }

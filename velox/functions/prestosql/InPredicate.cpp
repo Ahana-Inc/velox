@@ -78,12 +78,80 @@ std::pair<std::unique_ptr<common::Filter>, bool> createBigintValuesFilter(
       "IN predicate expects at least one non-null value in the in-list");
   if (values.size() == 1) {
     return {
-        std::make_unique<common::BigintRange>(
+        std::make_unique<common::BigintRange<int64_t>>(
             values[0], values[0], nullAllowed),
         false};
   }
 
-  return {common::createBigintValues(values, nullAllowed), false};
+  return {common::createBigintValues<int64_t>(values, nullAllowed), false};
+}
+
+template <typename T>
+std::optional<std::pair<std::vector<T>, bool>> toDecimalValues(
+    const std::vector<exec::VectorFunctionArg>& inputArgs) {
+  const auto& constantValue = inputArgs[1].constantValue;
+  if (!constantValue) {
+    return std::nullopt;
+  }
+
+  auto constantInput =
+      std::dynamic_pointer_cast<ConstantVector<ComplexType>>(constantValue);
+  if (constantInput->isNullAt(0)) {
+    return std::optional<std::pair<std::vector<T>, bool>>({{}, true});
+  }
+  auto arrayVector = dynamic_cast<const ArrayVector*>(
+      constantInput->valueVector()->wrappedVector());
+  auto elementsVector =
+      arrayVector->elements()->as<SimpleVector<UnscaledShortDecimal>>();
+  auto offset = arrayVector->offsetAt(constantInput->index());
+  auto size = arrayVector->sizeAt(constantInput->index());
+  VELOX_USER_CHECK_GT(size, 0, "IN list must not be empty");
+
+  std::vector<T> values;
+  values.reserve(size);
+  bool nullAllowed = false;
+
+  for (auto i = offset; i < offset + size; i++) {
+    if (elementsVector->isNullAt(i)) {
+      nullAllowed = true;
+    } else {
+      values.emplace_back(elementsVector->valueAt(i).unscaledValue());
+    }
+  }
+
+  return std::optional<std::pair<std::vector<T>, bool>>(
+      {std::move(values), nullAllowed});
+}
+
+template <TypeKind K, typename T>
+std::pair<std::unique_ptr<common::Filter>, bool> createDecimalValuesFilter(
+    const std::vector<exec::VectorFunctionArg>& inputArgs) {
+  std::optional<std::pair<std::vector<T>, bool>> valuesPair;
+  if constexpr (K == TypeKind::SHORT_DECIMAL) {
+    valuesPair = toDecimalValues<int64_t>(inputArgs);
+  } else {
+    valuesPair = toDecimalValues<int128_t>(inputArgs);
+  }
+
+  if (!valuesPair.has_value()) {
+    return {nullptr, false};
+  }
+
+  const auto& values = valuesPair.value().first;
+  bool nullAllowed = valuesPair.value().second;
+
+  if (values.empty() && nullAllowed) {
+    return {nullptr, true};
+  }
+  VELOX_USER_CHECK(
+      !values.empty(),
+      "IN predicate expects at least one non-null value in the in-list");
+
+  if constexpr (K == TypeKind::SHORT_DECIMAL) {
+    return {common::createBigintValues<int64_t>(values, nullAllowed), false};
+  } else if constexpr (K == TypeKind::LONG_DECIMAL) {
+    return {common::createBigintValues<int128_t>(values, nullAllowed), false};
+  }
 }
 
 // See createBigintValuesFilter.
@@ -139,6 +207,14 @@ class InPredicate : public exec::VectorFunction {
       case TypeKind::TINYINT:
         filter = createBigintValuesFilter<int8_t>(inputArgs);
         break;
+      case TypeKind::SHORT_DECIMAL:
+        filter = createDecimalValuesFilter<TypeKind::SHORT_DECIMAL, int64_t>(
+            inputArgs);
+        break;
+      case TypeKind::LONG_DECIMAL:
+        filter = createDecimalValuesFilter<TypeKind::LONG_DECIMAL, int128_t>(
+            inputArgs);
+        break;
       case TypeKind::VARCHAR:
       case TypeKind::VARBINARY:
         filter = createBytesValuesFilter(inputArgs);
@@ -176,18 +252,30 @@ class InPredicate : public exec::VectorFunction {
         break;
       case TypeKind::INTEGER:
         applyTyped<int32_t>(rows, input, context, result, [&](int32_t value) {
-          return filter_->testInt64(value);
+          return filter_->testInt64(static_cast<int64_t>(value));
         });
         break;
       case TypeKind::SMALLINT:
         applyTyped<int16_t>(rows, input, context, result, [&](int16_t value) {
-          return filter_->testInt64(value);
+          return filter_->testInt64(static_cast<int64_t>(value));
         });
         break;
       case TypeKind::TINYINT:
         applyTyped<int8_t>(rows, input, context, result, [&](int8_t value) {
-          return filter_->testInt64(value);
+          return filter_->testInt64(static_cast<int64_t>(value));
         });
+        break;
+      case TypeKind::SHORT_DECIMAL:
+        applyTyped<TypeTraits<TypeKind::SHORT_DECIMAL>::NativeType>(
+            rows, input, context, result, [&](UnscaledShortDecimal value) {
+              return filter_->testInt64(value.unscaledValue());
+            });
+        break;
+      case TypeKind::LONG_DECIMAL:
+        applyTyped<TypeTraits<TypeKind::LONG_DECIMAL>::NativeType>(
+            rows, input, context, result, [&](UnscaledLongDecimal value) {
+              return filter_->testInt64(value.unscaledValue());
+            });
         break;
       case TypeKind::VARCHAR:
       case TypeKind::VARBINARY:
@@ -219,6 +307,22 @@ class InPredicate : public exec::VectorFunction {
                                   .argumentType("array(unknown)")
                                   .build());
     }
+    signatures.emplace_back(
+        exec::FunctionSignatureBuilder()
+            .returnType("boolean")
+            .integerVariable("a_precision")
+            .integerVariable("a_scale")
+            .argumentType("DECIMAL(a_precision, a_scale)")
+            .argumentType("array(DECIMAL(a_precision, a_scale))")
+            .build());
+    signatures.emplace_back(exec::FunctionSignatureBuilder()
+                                .returnType("boolean")
+                                .integerVariable("a_precision")
+                                .integerVariable("a_scale")
+                                .argumentType("DECIMAL(a_precision, a_scale)")
+                                .argumentType("array(unknown)")
+                                .build());
+
     return signatures;
   }
 

@@ -91,13 +91,14 @@ bool toSubfield(
   return true;
 }
 
-common::BigintRange* asBigintRange(std::unique_ptr<common::Filter>& filter) {
-  return dynamic_cast<common::BigintRange*>(filter.get());
+common::BigintRange<int64_t>* asBigintRange(
+    std::unique_ptr<common::Filter>& filter) {
+  return dynamic_cast<common::BigintRange<int64_t>*>(filter.get());
 }
 
-common::BigintMultiRange* asBigintMultiRange(
+common::BigintMultiRange<int64_t>* asBigintMultiRange(
     std::unique_ptr<common::Filter>& filter) {
-  return dynamic_cast<common::BigintMultiRange*>(filter.get());
+  return dynamic_cast<common::BigintMultiRange<int64_t>*>(filter.get());
 }
 
 template <typename T, typename U>
@@ -110,16 +111,18 @@ std::unique_ptr<common::Filter> makeOrFilter(
     std::unique_ptr<common::Filter> b) {
   if (asBigintRange(a) && asBigintRange(b)) {
     return bigintOr(
-        asUniquePtr<common::BigintRange>(std::move(a)),
-        asUniquePtr<common::BigintRange>(std::move(b)));
+        asUniquePtr<common::BigintRange<int64_t>>(std::move(a)),
+        asUniquePtr<common::BigintRange<int64_t>>(std::move(b)));
   }
 
   if (asBigintRange(a) && asBigintMultiRange(b)) {
     const auto& ranges = asBigintMultiRange(b)->ranges();
-    std::vector<std::unique_ptr<common::BigintRange>> newRanges;
-    newRanges.emplace_back(asUniquePtr<common::BigintRange>(std::move(a)));
+    std::vector<std::unique_ptr<common::BigintRange<int64_t>>> newRanges;
+    newRanges.emplace_back(
+        asUniquePtr<common::BigintRange<int64_t>>(std::move(a)));
     for (const auto& range : ranges) {
-      newRanges.emplace_back(asUniquePtr<common::BigintRange>(range->clone()));
+      newRanges.emplace_back(
+          asUniquePtr<common::BigintRange<int64_t>>(range->clone()));
     }
 
     std::sort(
@@ -127,7 +130,7 @@ std::unique_ptr<common::Filter> makeOrFilter(
           return a->lower() < b->lower();
         });
 
-    return std::make_unique<common::BigintMultiRange>(
+    return std::make_unique<common::BigintMultiRange<int64_t>>(
         std::move(newRanges), false);
   }
 
@@ -306,18 +309,21 @@ std::unique_ptr<common::Filter> makeNotEqualFilter(
       value->typeKind() == TypeKind::BIGINT) {
     // Cast lessThanFilter and greaterThanFilter to
     // std::unique_ptr<common::BigintRange>.
-    std::vector<std::unique_ptr<common::BigintRange>> ranges;
+    std::vector<std::unique_ptr<common::BigintRange<int64_t>>> ranges;
     auto lessRange =
-        dynamic_cast<common::BigintRange*>(lessThanFilter.release());
+        dynamic_cast<common::BigintRange<int64_t>*>(lessThanFilter.release());
     VELOX_CHECK_NOT_NULL(lessRange, "Less-than range is null");
-    ranges.emplace_back(std::unique_ptr<common::BigintRange>(lessRange));
+    ranges.emplace_back(
+        std::unique_ptr<common::BigintRange<int64_t>>(lessRange));
 
-    auto greaterRange =
-        dynamic_cast<common::BigintRange*>(greaterThanFilter.release());
+    auto greaterRange = dynamic_cast<common::BigintRange<int64_t>*>(
+        greaterThanFilter.release());
     VELOX_CHECK_NOT_NULL(greaterRange, "Greater-than range is null");
-    ranges.emplace_back(std::unique_ptr<common::BigintRange>(greaterRange));
+    ranges.emplace_back(
+        std::unique_ptr<common::BigintRange<int64_t>>(greaterRange));
 
-    return std::make_unique<common::BigintMultiRange>(std::move(ranges), false);
+    return std::make_unique<common::BigintMultiRange<int64_t>>(
+        std::move(ranges), false);
   } else {
     std::vector<std::unique_ptr<common::Filter>> filters;
     filters.emplace_back(std::move(lessThanFilter));

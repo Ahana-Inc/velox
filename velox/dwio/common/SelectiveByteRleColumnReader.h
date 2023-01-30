@@ -104,21 +104,21 @@ void SelectiveByteRleColumnReader::processFilter(
       }
       break;
     case FilterKind::kBigintRange:
-      readHelper<Reader, velox::common::BigintRange, isDense>(
+      readHelper<Reader, velox::common::BigintRange<int64_t>, isDense>(
           filter, rows, extractValues);
       break;
     case FilterKind::kNegatedBigintRange:
-      readHelper<Reader, velox::common::NegatedBigintRange, isDense>(
+      readHelper<Reader, velox::common::NegatedBigintRange<int64_t>, isDense>(
           filter, rows, extractValues);
       break;
     case FilterKind::kBigintValuesUsingBitmask:
-      readHelper<Reader, velox::common::BigintValuesUsingBitmask, isDense>(
+      readHelper<Reader, velox::common::BigintValuesUsingBitmask<int64_t>, isDense>(
           filter, rows, extractValues);
       break;
     case FilterKind::kNegatedBigintValuesUsingBitmask:
       readHelper<
           Reader,
-          velox::common::NegatedBigintValuesUsingBitmask,
+          velox::common::NegatedBigintValuesUsingBitmask<int64_t>,
           isDense>(filter, rows, extractValues);
       break;
     default:
