@@ -236,62 +236,13 @@ TEST_F(MinMaxTest, initialValue) {
   testAggregations({row}, {}, {"max(c1)"}, "SELECT -1");
 }
 
-/// TODO: Add vectorfuzzer support for decimals to use existing
-/// MinMaxTest::doTest() call.
-/// https://github.com/facebookincubator/velox/issues/3756
 TEST_F(MinMaxTest, shortDecimal) {
-  auto shortType = DECIMAL(5, 4);
-  auto shortDecimal = makeNullableShortDecimalFlatVector(
-      {10000,
-       20000,
-       -20000,
-       -10000,
-       std::nullopt,
-       -50000,
-       -99998,
-       99999,
-       -99999,
-       99998},
-      shortType);
-  testAggregations(
-      {makeRowVector({shortDecimal})},
-      {},
-      {"max(c0)", "min(c0)"},
-      {},
-      {makeRowVector(
-          {makeShortDecimalFlatVector({99999}, shortType),
-           makeShortDecimalFlatVector({-99999}, shortType)})});
+  doTest(max, SHORT_DECIMAL(18, 3));
+  doTest(min, SHORT_DECIMAL(3, 1));
 }
 
 TEST_F(MinMaxTest, longDecimal) {
-  auto longType = DECIMAL(38, 4);
-  testAggregations(
-      {makeRowVector({makeNullableLongDecimalFlatVector(
-          {buildInt128(10, 300),
-           buildInt128(-10, 300),
-           buildInt128(200, 300),
-           UnscaledLongDecimal::max().unscaledValue() - 1,
-           UnscaledLongDecimal::min().unscaledValue() + 1,
-           std::nullopt},
-          longType)})},
-      {},
-      {"max(c0)", "min(c0)"},
-      {},
-      {makeRowVector(
-          {makeLongDecimalFlatVector(
-               {UnscaledLongDecimal::max().unscaledValue() - 1}, longType),
-           makeLongDecimalFlatVector(
-               {UnscaledLongDecimal::min().unscaledValue() + 1}, longType)})});
-
-  testAggregations(
-      {makeRowVector({makeNullableLongDecimalFlatVector(
-          {-100, buildInt128(-10, 300), buildInt128(200, 300), std::nullopt},
-          longType)})},
-      {},
-      {"max(c0)", "min(c0)"},
-      {},
-      {makeRowVector(
-          {makeLongDecimalFlatVector({buildInt128(200, 300)}, longType),
-           makeLongDecimalFlatVector({buildInt128(-10, 300)}, longType)})});
+  doTest(max, LONG_DECIMAL(20, 3));
+  doTest(min, LONG_DECIMAL(38, 19));
 }
 } // namespace

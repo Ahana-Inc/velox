@@ -79,18 +79,35 @@ class MinMaxAggregate : public SimpleNumericAggregate<T, T, T> {
 
   void extractValues(char** groups, int32_t numGroups, VectorPtr* result)
       override {
-    BaseAggregate::template doExtractValues<T>(
-        groups, numGroups, result, [&](char* group) {
-          return *BaseAggregate::Aggregate::template value<T>(group);
-        });
+    if constexpr (std::is_same_v<UnscaledLongDecimal, T>) {
+      BaseAggregate::template doExtractValues<UnscaledLongDecimal>(
+          groups, numGroups, result, [&](char* group) {
+            return BaseAggregate::Aggregate::template getValue<
+                UnscaledLongDecimal>(group);
+          });
+    } else {
+      BaseAggregate::template doExtractValues<T>(
+          groups, numGroups, result, [&](char* group) {
+            return *BaseAggregate::Aggregate::template value<T>(group);
+          });
+    }
   }
 
   void extractAccumulators(char** groups, int32_t numGroups, VectorPtr* result)
       override {
-    BaseAggregate::template doExtractValues<T>(
-        groups, numGroups, result, [&](char* group) {
-          return *BaseAggregate::Aggregate::template value<T>(group);
-        });
+    if constexpr (std::is_same_v<UnscaledLongDecimal, T>) {
+      BaseAggregate::template doExtractValues<T>(
+          groups, numGroups, result, [&](char* group) {
+            return BaseAggregate::Aggregate::template getValue<
+                UnscaledLongDecimal>(group);
+          });
+
+    } else {
+      BaseAggregate::template doExtractValues<T>(
+          groups, numGroups, result, [&](char* group) {
+            return *BaseAggregate::Aggregate::template value<T>(group);
+          });
+    }
   }
 };
 

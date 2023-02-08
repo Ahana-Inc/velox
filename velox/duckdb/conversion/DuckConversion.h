@@ -48,6 +48,14 @@ variant duckValueToVariant(
     const ::duckdb::Value& val,
     bool parseDecimalAsDouble);
 
+// Converts duckDB decimal Value into appropriate decimal variant.
+// The duckdb::Value::GetValue() call for decimal type returns a double value.
+// To avoid this, this method uses the duckdb::Value::GetUnsafeValue<int>()
+// method.
+// @param val duckdb decimal value.
+// @return decimal variant.
+variant decimalVariant(const ::duckdb::Value& val);
+
 // value conversion routines
 template <class T>
 struct DuckNumericConversion {

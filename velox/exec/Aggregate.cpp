@@ -89,6 +89,15 @@ getAggregateFunctionSignatures(const std::string& name) {
   return std::nullopt;
 }
 
+template <>
+UnscaledLongDecimal Aggregate::getValue<UnscaledLongDecimal>(
+    char* group) const {
+  auto lower = *reinterpret_cast<const uint64_t*>(group + offset_);
+  auto upper =
+      *reinterpret_cast<const uint64_t*>(group + offset_ + sizeof(uint64_t));
+  return UnscaledLongDecimal(buildInt128(upper, lower));
+}
+
 std::unique_ptr<Aggregate> Aggregate::create(
     const std::string& name,
     core::AggregationNode::Step step,

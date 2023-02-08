@@ -266,6 +266,11 @@ class Aggregate {
   }
 
   template <typename T>
+  T getValue(char* group) const {
+    return *reinterpret_cast<T>(group + offset_);
+  }
+
+  template <typename T>
   static uint64_t* getRawNulls(T* vector) {
     if (vector->mayHaveNulls()) {
       BufferPtr nulls = vector->mutableNulls(vector->size());
@@ -308,6 +313,9 @@ class Aggregate {
   // sequential.
   std::vector<vector_size_t> pushdownCustomIndices_;
 };
+
+template <>
+UnscaledLongDecimal Aggregate::getValue<UnscaledLongDecimal>(char* group) const;
 
 using AggregateFunctionFactory = std::function<std::unique_ptr<Aggregate>(
     core::AggregationNode::Step step,
