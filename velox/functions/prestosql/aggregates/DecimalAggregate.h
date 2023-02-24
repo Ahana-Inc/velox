@@ -73,7 +73,7 @@ class DecimalAggregate : public exec::Aggregate {
   explicit DecimalAggregate(TypePtr resultType) : exec::Aggregate(resultType) {}
 
   int32_t accumulatorFixedWidthSize() const override {
-    return sizeof(DecimalAggregate);
+    return sizeof(LongDecimalWithOverflowState);
   }
 
   int32_t accumulatorAlignmentSize() const override {
@@ -208,6 +208,7 @@ class DecimalAggregate : public exec::Aggregate {
       });
     } else {
       rows.applyToSelected([&](vector_size_t i) {
+        clearNull(groups[i]);
         auto decodedIndex = decodedPartial_.index(i);
         auto serializedAccumulator =
             intermediateFlatVector->valueAt(decodedIndex);
@@ -240,6 +241,7 @@ class DecimalAggregate : public exec::Aggregate {
         if (decodedPartial_.isNullAt(i)) {
           return;
         }
+        clearNull(group);
         auto decodedIndex = decodedPartial_.index(i);
         auto serializedAccumulator =
             intermediateFlatVector->valueAt(decodedIndex);
@@ -247,6 +249,7 @@ class DecimalAggregate : public exec::Aggregate {
       });
     } else {
       rows.applyToSelected([&](vector_size_t i) {
+        clearNull(group);
         auto decodedIndex = decodedPartial_.index(i);
         auto serializedAccumulator =
             intermediateFlatVector->valueAt(decodedIndex);

@@ -343,6 +343,34 @@ TEST_F(AverageAggregationTest, avgDecimal) {
       {makeRowVector({makeShortDecimalFlatVector({3'000}, DECIMAL(10, 1))})});
 }
 
+TEST_F(AverageAggregationTest, avgDecimalWithGroupingKeys) {
+  auto input = {
+      makeRowVector(
+          {makeFlatVector<int32_t>({1, 1}),
+           makeShortDecimalFlatVector({37220, 53450}, DECIMAL(5, 2))}),
+      makeRowVector(
+          {makeFlatVector<int32_t>({1, 1}),
+           makeShortDecimalFlatVector({10410, 9250}, DECIMAL(5, 2))}),
+  };
+  createDuckDbTable(input);
+  testAggregations(
+      input, {"c0"}, {"avg(c1)"}, "SELECT c0, avg(c1) from tmp group by c0");
+}
+
+TEST_F(AverageAggregationTest, avgSampleInt) {
+  auto input = {
+      makeRowVector(
+          {makeFlatVector<int32_t>({1, 1}),
+           makeFlatVector<int32_t>({100, 100})}),
+      makeRowVector(
+          {makeFlatVector<int32_t>({1, 1}),
+           makeFlatVector<int32_t>({100, 100})}),
+  };
+  createDuckDbTable(input);
+  testAggregations(
+      input, {"c0"}, {"avg(c1)"}, "SELECT c0, avg(c1) from tmp group by c0");
+}
+
 TEST_F(AverageAggregationTest, constantVectorOverflow) {
   auto rows = makeRowVector({makeConstant<int32_t>(1073741824, 100)});
   auto plan = PlanBuilder()

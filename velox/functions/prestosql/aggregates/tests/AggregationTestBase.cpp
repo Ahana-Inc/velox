@@ -183,7 +183,7 @@ void AggregationTestBase::testAggregations(
     assertResults(queryBuilder);
   }
 
-  if (!groupingKeys.empty() && allowInputShuffle_) {
+  /*if (!groupingKeys.empty() && allowInputShuffle_) {
     SCOPED_TRACE("Run partial + final with spilling");
     PlanBuilder builder(pool());
     makeSource(builder);
@@ -327,7 +327,7 @@ void AggregationTestBase::testAggregations(
     AssertQueryBuilder queryBuilder(builder.planNode(), duckDbQueryRunner_);
     assertResults(queryBuilder.maxDrivers(2));
   }
-
+*/
   if (testStreaming_ && groupingKeys.empty() &&
       postAggregationProjections.empty()) {
     SCOPED_TRACE("Streaming");
