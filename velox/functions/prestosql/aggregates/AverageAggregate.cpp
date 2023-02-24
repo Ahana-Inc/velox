@@ -314,9 +314,10 @@ class DecimalAverageAggregate : public DecimalAggregate<TUnscaledType> {
   virtual TUnscaledType computeFinalValue(
       LongDecimalWithOverflowState* accumulator) final {
     // Handles round-up of fraction results.
+    int128_t sum = buildInt128(accumulator->upperSum, accumulator->lowerSum);
     int128_t average{0};
     DecimalUtil::computeAverage(
-        average, accumulator->sum, accumulator->count, accumulator->overflow);
+        average, sum, accumulator->count, accumulator->overflow);
     return TUnscaledType(average);
   }
 };

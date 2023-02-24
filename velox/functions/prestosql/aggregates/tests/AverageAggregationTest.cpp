@@ -220,7 +220,9 @@ TEST_F(AverageAggregationTest, partialResults) {
 
 TEST_F(AverageAggregationTest, decimalAccumulator) {
   LongDecimalWithOverflowState accumulator;
-  accumulator.sum = -1000;
+  int128_t value = -1000;
+  accumulator.upperSum = UPPER(value);
+  accumulator.lowerSum = LOWER(value);
   accumulator.count = 10;
   accumulator.overflow = -1;
 
@@ -230,7 +232,8 @@ TEST_F(AverageAggregationTest, decimalAccumulator) {
   LongDecimalWithOverflowState mergedAccumulator;
   mergedAccumulator.mergeWith(serialized);
 
-  ASSERT_EQ(mergedAccumulator.sum, accumulator.sum);
+  ASSERT_EQ(mergedAccumulator.upperSum, accumulator.upperSum);
+  ASSERT_EQ(mergedAccumulator.lowerSum, accumulator.lowerSum);
   ASSERT_EQ(mergedAccumulator.count, accumulator.count);
   ASSERT_EQ(mergedAccumulator.overflow, accumulator.overflow);
 
@@ -238,7 +241,7 @@ TEST_F(AverageAggregationTest, decimalAccumulator) {
   memset(buffer, 0, accumulator.serializedSize());
   mergedAccumulator.serialize(serialized);
   mergedAccumulator.mergeWith(serialized);
-  ASSERT_EQ(mergedAccumulator.sum, accumulator.sum * 2);
+  ASSERT_EQ(buildInt128(mergedAccumulator.upperSum, mergedAccumulator.lowerSum), buildInt128(accumulator.upperSum, accumulator.lowerSum) * 2);
   ASSERT_EQ(mergedAccumulator.count, accumulator.count * 2);
   ASSERT_EQ(mergedAccumulator.overflow, accumulator.overflow * 2);
   delete[] buffer;
@@ -341,6 +344,23 @@ TEST_F(AverageAggregationTest, avgDecimal) {
       {"avg(c0)"},
       {},
       {makeRowVector({makeShortDecimalFlatVector({3'000}, DECIMAL(10, 1))})});
+}
+
+TEST_F(AverageAggregationTest, avgDecimalWithGroupingKeys) {
+  auto input = {
+      makeRowVector(
+          {makeNullableFlatVector<int32_t>({1, 1}),
+           makeShortDecimalFlatVector({37220, 53450}, DECIMAL(5,2))}),
+      makeRowVector(
+          {makeNullableFlatVector<int32_t>({1, 1}),
+           makeShortDecimalFlatVector({10410, 9250}, DECIMAL(5,2))}),
+  };
+
+  testAggregations(
+      input,
+      {"c0"},
+      {"avg(c1)"},
+      "SELECT 1, 27583::DECIMAL(10,2)");
 }
 
 TEST_F(AverageAggregationTest, constantVectorOverflow) {
