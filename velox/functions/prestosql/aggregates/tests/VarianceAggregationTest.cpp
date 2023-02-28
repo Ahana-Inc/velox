@@ -174,7 +174,7 @@ TEST_F(VarianceAggregationTest, varianceWithGlobalAggregation) {
         vectors,
         {},
         {GEN_AGG("c1"), GEN_AGG("c2"), GEN_AGG("c4"), GEN_AGG("c5")},
-        {"1", "a0"},
+        {"1", "a0", "a1", "a2", "a3"},
         sql,
         {0});
 
