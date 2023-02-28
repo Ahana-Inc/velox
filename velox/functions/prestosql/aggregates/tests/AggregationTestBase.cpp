@@ -84,6 +84,24 @@ void AggregationTestBase::testAggregations(
     const std::vector<std::string>& groupingKeys,
     const std::vector<std::string>& aggregates,
     const std::vector<std::string>& postAggregationProjections,
+    const std::string& duckDbSql,
+    const std::vector<uint32_t>& sortingKeys) {
+  SCOPED_TRACE(duckDbSql);
+  testAggregations(
+      [&](PlanBuilder& builder) { builder.values(data); },
+      groupingKeys,
+      aggregates,
+      postAggregationProjections,
+      [&](auto& builder) {
+        return builder.assertResults(duckDbSql, sortingKeys);
+      });
+}
+
+void AggregationTestBase::testAggregations(
+    const std::vector<RowVectorPtr>& data,
+    const std::vector<std::string>& groupingKeys,
+    const std::vector<std::string>& aggregates,
+    const std::vector<std::string>& postAggregationProjections,
     const std::vector<RowVectorPtr>& expectedResult) {
   testAggregations(
       [&](PlanBuilder& builder) { builder.values(data); },

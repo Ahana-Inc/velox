@@ -92,6 +92,16 @@ class AggregationTestBase : public exec::test::OperatorTestBase {
       const std::vector<std::string>& postAggregationProjections,
       const std::string& duckDbSql);
 
+  /// Same as above but allows to specify sortingKeys for floating-point
+  /// values comparison.
+  void testAggregations(
+      const std::vector<RowVectorPtr>& data,
+      const std::vector<std::string>& groupingKeys,
+      const std::vector<std::string>& aggregates,
+      const std::vector<std::string>& postAggregationProjections,
+      const std::string& duckDbSql,
+      const std::vector<uint32_t>& sortingKeys);
+
   /// Convenience version that allows to specify input data instead of a
   /// function to build Values plan node, and the expected result instead of a
   /// DuckDB SQL query to validate the result.
