@@ -169,12 +169,11 @@ TEST_F(VarianceAggregationTest, varianceWithGlobalAggregation) {
     // We need to use sorting keys to fix the precision difference between Velox
     // and DuckDB.
     auto sql = genAggrQuery(
-        "SELECT 1, {0}(c1), {0}(c2), {0}(c4), {0}(c5) FROM tmp", aggrName);
+        "SELECT {0}(c1), {0}(c2), {0}(c4), {0}(c5) FROM tmp", aggrName);
     testAggregations(
         vectors,
         {},
         {GEN_AGG("c1"), GEN_AGG("c2"), GEN_AGG("c4"), GEN_AGG("c5")},
-        {"1", "a0", "a1", "a2", "a3"},
         sql);
 
     // Global aggregation; no input
