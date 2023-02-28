@@ -175,8 +175,7 @@ TEST_F(VarianceAggregationTest, varianceWithGlobalAggregation) {
         {},
         {GEN_AGG("c1"), GEN_AGG("c2"), GEN_AGG("c4"), GEN_AGG("c5")},
         {"1", "a0", "a1", "a2", "a3"},
-        sql,
-        {0});
+        sql);
 
     // Global aggregation; no input
     sql = genAggrQuery("SELECT {0}(c0) FROM tmp WHERE c0 % 2 = 5", aggrName);
@@ -268,7 +267,7 @@ TEST_F(VarianceAggregationTest, varianceWithGroupByAndFilter) {
   }
 }
 
-TEST_F(VarianceAggregationTest, variancePrecision) {
+TEST_F(VarianceAggregationTest, varianceWithoutPrecisionLoss) {
   auto vectors = {
       makeRowVector(
           {"c0", "c1"},
@@ -307,184 +306,6 @@ TEST_F(VarianceAggregationTest, variancePrecision) {
       {"c0"},
       {"stddev(c1)"},
       "SELECT c0, stddev(c1) FROM tmp GROUP BY 1");
-}
-
-TEST_F(VarianceAggregationTest, varianceFlaky) {
-  auto rowType = ROW({"c0"}, {DOUBLE()});
-  auto aggrNames = {
-//      "stddev",
-//      "stddev_pop",
-//      "stddev_samp",
-      "variance",
-//      "var_pop",
-//      "var_samp",
-  };
-
-//  auto vectors = makeVectors(rowType, 10, 10);
-  auto vectors = {
-      makeRowVector({
-          makeNullableFlatVector<double>({
-              0.9648885340421604,
-              0.9705927790435588,
-              0.10986175084420642,
-              0.8002804733808399,
-              0.9157355237082728,
-              0.8784306453988439,
-              0.8350085899945795,
-              0.6323592500344464,
-              0.27849821852222567,
-              NULL,
-          })
-      }),
-      makeRowVector({
-          makeNullableFlatVector<double>({
-              0.9648885340421604,
-              0.9705927790435588,
-              0.10986175084420642,
-              0.8002804733808399,
-              0.9157355237082728,
-              0.8784306453988439,
-              0.8350085899945795,
-              0.6323592500344464,
-              0.27849821852222567,
-              NULL,
-          })
-      }),
-      makeRowVector({
-          makeNullableFlatVector<double>({
-              0.9648885340421604,
-              0.9705927790435588,
-              0.10986175084420642,
-              0.8002804733808399,
-              0.9157355237082728,
-              0.8784306453988439,
-              0.8350085899945795,
-              0.6323592500344464,
-              0.27849821852222567,
-              NULL,
-          })
-      }),
-      makeRowVector({
-          makeNullableFlatVector<double>({
-              0.9648885340421604,
-              0.9705927790435588,
-              0.10986175084420642,
-              0.8002804733808399,
-              0.9157355237082728,
-              0.8784306453988439,
-              0.8350085899945795,
-              0.6323592500344464,
-              0.27849821852222567,
-              NULL,
-          })
-      }),
-      makeRowVector({
-          makeNullableFlatVector<double>({
-              0.9648885340421604,
-              0.9705927790435588,
-              0.10986175084420642,
-              0.8002804733808399,
-              0.9157355237082728,
-              0.8784306453988439,
-              0.8350085899945795,
-              0.6323592500344464,
-              0.27849821852222567,
-              NULL,
-          })
-      }),
-      makeRowVector({
-          makeNullableFlatVector<double>({
-              0.9648885340421604,
-              0.9705927790435588,
-              0.10986175084420642,
-              0.8002804733808399,
-              0.9157355237082728,
-              0.8784306453988439,
-              0.8350085899945795,
-              0.6323592500344464,
-              0.27849821852222567,
-              NULL,
-          })
-      }),
-      makeRowVector({
-          makeNullableFlatVector<double>({
-              0.9648885340421604,
-              0.9705927790435588,
-              0.10986175084420642,
-              0.8002804733808399,
-              0.9157355237082728,
-              0.8784306453988439,
-              0.8350085899945795,
-              0.6323592500344464,
-              0.27849821852222567,
-              NULL,
-          })
-      }),
-      makeRowVector({
-          makeNullableFlatVector<double>({
-              0.9648885340421604,
-              0.9705927790435588,
-              0.10986175084420642,
-              0.8002804733808399,
-              0.9157355237082728,
-              0.8784306453988439,
-              0.8350085899945795,
-              0.6323592500344464,
-              0.27849821852222567,
-              NULL,
-          })
-      }),
-      makeRowVector({
-          makeNullableFlatVector<double>({
-              0.9648885340421604,
-              0.9705927790435588,
-              0.10986175084420642,
-              0.8002804733808399,
-              0.9157355237082728,
-              0.8784306453988439,
-              0.8350085899945795,
-              0.6323592500344464,
-              0.27849821852222567,
-              NULL,
-          })
-      }),
-      makeRowVector({
-          makeNullableFlatVector<double>({
-              0.9648885340421604,
-              0.9705927790435588,
-              0.10986175084420642,
-              0.8002804733808399,
-              0.9157355237082728,
-              0.8784306453988439,
-              0.8350085899945795,
-              0.6323592500344464,
-              0.27849821852222567,
-              NULL,
-          })
-      }),
-  };
-
-  createDuckDbTable(vectors);
-
-  auto res0 = duckDbQueryRunner_.execute("select * from tmp");
-  std::cout << res0->ToString() << std::endl;
-
-  for (const auto& aggrName : aggrNames) {
-    // Global aggregation
-    auto sql = genAggrQuery(
-        "SELECT 1, {0}(c0) FROM tmp", aggrName);
-
-    auto res = duckDbQueryRunner_.execute(sql);
-    std::cout << res->ToString() << std::endl;
-
-    testAggregations(
-        vectors,
-        {},
-        {GEN_AGG("c0")},
-        {"1", "a0"},
-        sql,
-        {0});
-  }
 }
 
 } // namespace
