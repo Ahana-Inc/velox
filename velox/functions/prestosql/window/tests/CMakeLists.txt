@@ -36,8 +36,8 @@ add_test(
 target_link_libraries(velox_windows_rank_test
                       ${CMAKE_WINDOW_TEST_LINK_LIBRARIES})
 
-add_executable(velox_windows_value_test NthValueTest.cpp
-                                        ${CMAKE_WINDOW_TEST_MAIN_FILES})
+add_library(velox_windows_value_test NthValueTest.cpp
+                                     ${CMAKE_WINDOW_TEST_MAIN_FILES})
 
 add_test(
   NAME velox_windows_value_test

@@ -108,20 +108,23 @@ RowVectorPtr WindowTestBase::makeRandomInputVector(vector_size_t size) {
        makeFlatVector<int64_t>(size, genRandomFrameValue)});
 }
 
-void WindowTestBase::testWindowFunction(
+int64_t WindowTestBase::testWindowFunction(
     const std::vector<RowVectorPtr>& input,
     const std::string& function,
     const std::vector<std::string>& overClauses,
     const std::vector<std::string>& frameClauses) {
   createDuckDbTable(input);
+  int64_t cnt = 0;
   for (const auto& overClause : overClauses) {
     for (auto& frameClause : frameClauses) {
       auto queryInfo =
           buildWindowQuery(input, function, overClause, frameClause);
       SCOPED_TRACE(queryInfo.functionSql);
       assertQuery(queryInfo.planNode, queryInfo.querySql);
+      cnt++;
     }
   }
+  return cnt;
 }
 
 void WindowTestBase::assertWindowFunctionError(

@@ -151,7 +151,7 @@ class WindowTestBase : public exec::test::OperatorTestBase {
   /// If the frameClauses is not specified, then the default is a single empty
   /// clause that corresponds to the default frame of RANGE UNBOUNDED PRECEDING
   /// AND CURRENT ROW.
-  void testWindowFunction(
+  int64_t testWindowFunction(
       const std::vector<RowVectorPtr>& input,
       const std::string& function,
       const std::vector<std::string>& overClauses,

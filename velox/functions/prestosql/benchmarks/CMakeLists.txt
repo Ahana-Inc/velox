@@ -161,3 +161,7 @@ add_executable(velox_functions_prestosql_benchmarks_cardinality
                CardinalityBenchmark.cpp)
 target_link_libraries(velox_functions_prestosql_benchmarks_cardinality
                       ${BENCHMARK_DEPENDENCIES})
+
+add_executable(velox_functions_prestosql_benchmarks_window WindowBenchmark.cpp)
+target_link_libraries(velox_functions_prestosql_benchmarks_window
+                      velox_windows_value_test ${BENCHMARK_DEPENDENCIES})
