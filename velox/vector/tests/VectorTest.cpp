@@ -2610,3 +2610,19 @@ TEST_F(VectorTest, rowCopyRanges) {
        makeFlatVector<int32_t>({1, 2, 3, 4})});
   test::assertEqualVectors(expected, RowVectorDest);
 }
+
+TEST_F(VectorTest, arrayOfNullRow) {
+  auto rowType = ROW({INTEGER(), VARCHAR()});
+  std::vector<std::vector<variant>> array{{variant(TypeKind::ROW)}};
+  auto arrayVector = makeArrayOfRowVector(rowType, array);
+
+  auto elements = arrayVector->elements();
+  auto rowVector = elements->as<RowVector>();
+  auto rowSize = rowType->size();
+  for (auto j = 0; j < rowSize; j++) {
+    auto child = rowVector->childAt(j);
+    for (auto i = 0; i < child->size(); i++) {
+      VELOX_CHECK(child->isNullAt(i), "not null");
+    }
+  }
+}
